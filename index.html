@@ -1,0 +1,278 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VIP TASK</title>
+<style>
+:root {
+  --bg: #080d19;
+  --card: #151f32;
+  --green: #c6ff00;
+  --white: #f5f7fb;
+  --muted: #8994a8;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--white);
+  font-family: Arial, sans-serif;
+  padding-bottom: 85px;
+}
+header {
+  padding: 24px 20px 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.logo { font-size: 25px; font-weight: 900; }
+.logo span { color: var(--green); }
+.balance {
+  background: var(--card);
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: bold;
+}
+.balance span { color: var(--green); }
+main { padding: 10px 18px; }
+h1 { font-size: 27px; margin-bottom: 8px; }
+.subtitle { color: var(--muted); font-size: 14px; }
+.hero {
+  margin: 22px 0;
+  padding: 23px;
+  border-radius: 20px;
+  background: linear-gradient(135deg,#1d2b42,#111a2b);
+  border: 1px solid #293850;
+}
+.hero h2 { margin: 0 0 10px; font-size: 22px; }
+.hero p { color: var(--muted); font-size: 14px; line-height: 1.5; }
+button {
+  border: 0;
+  border-radius: 12px;
+  background: var(--green);
+  color: #101510;
+  padding: 13px 18px;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+}
+.section-title {
+  font-size: 19px;
+  margin: 27px 0 14px;
+}
+.task {
+  background: var(--card);
+  border: 1px solid #26344a;
+  border-radius: 16px;
+  padding: 17px;
+  margin-bottom: 12px;
+}
+.task-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.task h3 { margin: 0 0 9px; font-size: 16px; }
+.task p { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+.reward { color: var(--green); font-weight: 900; white-space: nowrap; }
+.tag {
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 10px;
+}
+nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #101827;
+  border-top: 1px solid #29364b;
+  display: flex;
+  justify-content: space-around;
+  padding: 13px 4px calc(13px + env(safe-area-inset-bottom));
+}
+nav button {
+  background: transparent;
+  color: var(--muted);
+  padding: 7px;
+  font-size: 12px;
+}
+nav button.active { color: var(--green); }
+.page { display: none; }
+.page.active { display: block; }
+input, textarea, select {
+  width: 100%;
+  padding: 14px;
+  margin: 8px 0 15px;
+  border-radius: 11px;
+  border: 1px solid #34435b;
+  background: #101827;
+  color: white;
+  font-size: 15px;
+}
+label { font-size: 13px; color: var(--muted); }
+.stat {
+  background: var(--card);
+  border-radius: 15px;
+  padding: 18px;
+  margin: 12px 0;
+}
+.stat strong { color: var(--green); font-size: 24px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">VIP <span>TASK</span></div>
+  <div class="balance">Баланс: <span id="headerBalance">0 ₽</span></div>
+</header>
+
+<main>
+  <section id="home" class="page active">
+    <h1>Привет!</h1>
+    <div class="subtitle">Добро пожаловать на VIP TASK</div>
+
+    <div class="hero">
+      <h2>Зарабатывай онлайн</h2>
+      <p>Выполняй задания, участвуй в опросах и получай вознаграждение.</p>
+      <button onclick="showPage('tasks')">Найти задания</button>
+    </div>
+
+    <div class="section-title">Популярные задания</div>
+    <div id="homeTasks"></div>
+  </section>
+
+  <section id="tasks" class="page">
+    <h1>Задания</h1>
+    <div class="subtitle">Выбирай задания и получай вознаграждение</div>
+    <div id="allTasks"></div>
+  </section>
+
+  <section id="create" class="page">
+    <h1>Создать задание</h1>
+    <div class="subtitle">Размести свою рекламную кампанию</div>
+
+    <label>Название задания</label>
+    <input id="taskName" placeholder="Например: пройти опрос">
+
+    <label>Описание</label>
+    <textarea id="taskDescription" rows="4" placeholder="Опиши, что нужно сделать"></textarea>
+
+    <label>Оплата исполнителю (₽)</label>
+    <input id="taskPrice" type="number" min="1" placeholder="Например: 20">
+
+    <button onclick="createTask()">Создать задание</button>
+    <p class="subtitle">Публикация в этой демоверсии бесплатная.</p>
+  </section>
+
+  <section id="wallet" class="page">
+    <h1>Кошелёк</h1>
+    <div class="stat">
+      <div class="subtitle">Доступный баланс</div>
+      <strong id="walletBalance">0 ₽</strong>
+    </div>
+    <div class="stat">
+      <div class="subtitle">Минимальный вывод</div>
+      <strong>15 ₽</strong>
+    </div>
+    <button onclick="alert('Заявки на вывод подключим на следующем этапе.')">Заказать вывод</button>
+    <p class="subtitle">Пополнение и выплаты пока не подключены.</p>
+  </section>
+
+  <section id="profile" class="page">
+    <h1>Профиль</h1>
+    <div class="stat">
+      <div class="subtitle">Аккаунт</div>
+      <strong>Демо-пользователь</strong>
+    </div>
+    <div class="stat">
+      <div class="subtitle">Статус</div>
+      <strong>Новичок</strong>
+    </div>
+    <p class="subtitle">Позже здесь появятся Telegram-профиль, история заданий и настройки.</p>
+  </section>
+</main>
+
+<nav>
+  <button class="active" onclick="showPage('home',this)">Главная</button>
+  <button onclick="showPage('tasks',this)">Задания</button>
+  <button onclick="showPage('create',this)">Создать</button>
+  <button onclick="showPage('wallet',this)">Кошелёк</button>
+  <button onclick="showPage('profile',this)">Профиль</button>
+</nav>
+
+<script>
+let tasks = [
+  {name:"Пройти короткий опрос",description:"Ответь на вопросы рекламного исследования.",price:20},
+  {name:"Проверить удобство сайта",description:"Посмотри сайт и поделись честным мнением.",price:35},
+  {name:"Протестировать приложение",description:"Проверь функции и сообщи о впечатлениях.",price:50}
+];
+
+function showPage(id, button) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  if(button) button.classList.add('active');
+  else {
+    const index = ['home','tasks','create','wallet','profile'].indexOf(id);
+    document.querySelectorAll('nav button')[index].classList.add('active');
+  }
+}
+
+function renderTasks() {
+  const html = tasks.map((task,i) => `
+    <div class="task">
+      <div class="tag">ЗАДАНИЕ #${i+1}</div>
+      <div class="task-top">
+        <h3>${escapeHTML(task.name)}</h3>
+        <div class="reward">+${task.price} ₽</div>
+      </div>
+      <p>${escapeHTML(task.description)}</p>
+      <button onclick="takeTask(${i})">Выполнить</button>
+    </div>
+  `).join('');
+  document.getElementById('allTasks').innerHTML = html;
+  document.getElementById('homeTasks').innerHTML = tasks.slice(0,2).map((task,i) => `
+    <div class="task">
+      <div class="task-top"><h3>${escapeHTML(task.name)}</h3><div class="reward">+${task.price} ₽</div></div>
+      <p>${escapeHTML(task.description)}</p>
+      <button onclick="takeTask(${i})">Выполнить</button>
+    </div>
+  `).join('');
+}
+
+function escapeHTML(value) {
+  return String(value).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+function takeTask(index) {
+  alert('Задание принято в демоверсии. Проверку и начисление подключим позже.');
+}
+
+function createTask() {
+  const name = document.getElementById('taskName').value.trim();
+  const description = document.getElementById('taskDescription').value.trim();
+  const price = Number(document.getElementById('taskPrice').value);
+
+  if(!name || !description || !Number.isFinite(price) || price <= 0) {
+    alert('Заполни все поля корректно.');
+    return;
+  }
+
+  tasks.unshift({name,description,price});
+  renderTasks();
+  document.getElementById('taskName').value = '';
+  document.getElementById('taskDescription').value = '';
+  document.getElementById('taskPrice').value = '';
+  alert('Задание добавлено в демоверсию!');
+  showPage('tasks');
+}
+
+renderTasks();
+</script>
+</body>
+</html>
