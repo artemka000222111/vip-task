@@ -60,6 +60,12 @@ class TelegramAuthTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "время"):
                 verify_telegram_init_data(make_init_data(auth_date=1_800_000_100))
 
+    def test_rejects_duplicate_parameters(self):
+        init_data = make_init_data() + "&auth_date=1800000000"
+        with patch.dict("os.environ", {"BOT_TOKEN": TOKEN}):
+            with self.assertRaisesRegex(ValueError, "Некорректные"):
+                verify_telegram_init_data(init_data)
+
     def test_rejects_missing_signature(self):
         init_data = "auth_date=1800000000&user=%7B%22id%22%3A123%7D"
         with patch.dict("os.environ", {"BOT_TOKEN": TOKEN}):
