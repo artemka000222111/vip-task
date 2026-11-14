@@ -252,7 +252,6 @@ async def create_task(data: CreateTaskRequest, request: Request):
     async with pool.acquire() as conn:
         async with conn.transaction():
 
-            await expire_overdue_slots(conn)
 
             account = await conn.fetchrow(
                 """
@@ -353,7 +352,6 @@ async def take_task(task_id: int, request: Request):
     async with pool.acquire() as conn:
         async with conn.transaction():
 
-            await expire_overdue_slots(conn)
 
             account = await conn.fetchrow(
                 """
@@ -501,7 +499,6 @@ async def submit_task(
     async with pool.acquire() as conn:
         async with conn.transaction():
 
-            await expire_overdue_slots(conn)
 
             slot = await conn.fetchrow(
                 """
@@ -656,7 +653,6 @@ async def get_admin_reviews(request: Request):
 
     async with pool.acquire() as conn:
         async with conn.transaction():
-            await expire_overdue_slots(conn)
 
         rows = await conn.fetch(
             """
