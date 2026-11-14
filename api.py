@@ -234,15 +234,21 @@ async def upload_media(request: Request, file: UploadFile = File(...)):
         raise HTTPException(413, "Максимальный размер изображения — 5 МБ")
 
     valid_signature = (
-        (file.content_type == "image/jpeg" and content.startswith(b"\\xff\\xd8\\xff"))
+        (
+            file.content_type == "image/jpeg"
+            and len(content) >= 3
+            and content[0] == 0xFF
+            and content[1] == 0xD8
+            and content[2] == 0xFF
+        )
         or (
             file.content_type == "image/png"
-            and content.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+            and content[:8] == bytes((137, 80, 78, 71, 13, 10, 26, 10))
         )
         or (
             file.content_type == "image/webp"
             and len(content) >= 12
-            and content.startswith(b"RIFF")
+            and content[:4] == b"RIFF"
             and content[8:12] == b"WEBP"
         )
     )
