@@ -1493,22 +1493,6 @@ async def remove_executor(
 
             await conn.execute(
                 """
-                INSERT INTO task_bans (
-                    task_id,
-                    executor_id,
-                    reason
-                )
-                VALUES ($1, $2, $3)
-                ON CONFLICT (task_id, executor_id)
-                DO NOTHING
-                """,
-                task_id,
-                executor_id,
-                data.reason,
-            )
-
-            await conn.execute(
-                """
                 UPDATE submissions
                 SET status = 'removed',
                     admin_reason = $1,
