@@ -69,6 +69,22 @@ class DatabaseMigrationIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 executor_id,
             )
 
+            await conn.execute(
+                """
+                INSERT INTO task_slot_assignments (
+                    task_id, slot_id, executor_id, assigned_at,
+                    ended_at, outcome, reason
+                )
+                VALUES (
+                    $1, $2, $3, NOW() - INTERVAL '2 hours',
+                    NOW() - INTERVAL '1 hour', 'removed', 'Старое назначение'
+                )
+                """,
+                task_id,
+                approved_slot_id,
+                executor_id,
+            )
+
         # Повторный запуск должен быть безопасным и заполнить новые данные
         # для записей, созданных до появления соответствующих миграций.
         await init_db(self.pool)
