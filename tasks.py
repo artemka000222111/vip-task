@@ -477,9 +477,9 @@ async def take_task(task_id: int, request: Request):
             await conn.execute(
                 """
                 INSERT INTO task_slot_assignments (
-                    task_id, slot_id, executor_id
+                    task_id, slot_id, executor_id, deadline_at
                 )
-                VALUES ($1, $2, $3)
+                VALUES ($1, $2, $3, $4)
                 """,
                 task_id,
                 slot["id"],
