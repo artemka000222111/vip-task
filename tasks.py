@@ -484,6 +484,7 @@ async def take_task(task_id: int, request: Request):
                 task_id,
                 slot["id"],
                 executor_id,
+                deadline,
             )
 
     return {
