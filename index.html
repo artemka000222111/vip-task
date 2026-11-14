@@ -1419,6 +1419,24 @@ document.getElementById("sbpForm").addEventListener("submit", async event => {
   }
 });
 
+async function adminRemoveExecutor(taskId, slotId) {
+  const reason = prompt("Укажи причину снятия исполнителя:");
+  if (!reason || reason.trim().length < 3) return;
+  if (!confirm("Снять исполнителя с этого места? Место снова станет свободным, резерв останется у заказа.")) return;
+
+  try {
+    await api(`/api/orders/${taskId}/slots/${slotId}/remove-executor`, {
+      method:"POST",
+      body:JSON.stringify({reason:reason.trim()})
+    });
+    notify("Исполнитель снят. Место снова доступно.");
+    await loadAdminAssignments();
+    await loadAdminReviews();
+  } catch (error) {
+    notify(error.message);
+  }
+}
+
 async function loadAdminAssignments() {
   const container = document.getElementById("adminAssignments");
   container.innerHTML = '<div class="loading">Загружаем историю...</div>';
@@ -1440,6 +1458,7 @@ async function loadAdminAssignments() {
           <div class="small">Начало: ${new Date(item.assigned_at).toLocaleString("ru-RU")}</div>
           ${item.ended_at ? `<div class="small">Завершено: ${new Date(item.ended_at).toLocaleString("ru-RU")}</div>` : ""}
           ${item.reason ? `<div class="notice">${escapeHTML(item.reason)}</div>` : ""}
+          ${!item.ended_at ? `<button class="btn danger" onclick="adminRemoveExecutor(${item.task_id},${item.slot_id})">Снять исполнителя</button>` : ""}
         </div>
       `;
     }).join("") : '<div class="empty">История пока пуста.</div>';
