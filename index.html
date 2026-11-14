@@ -1298,6 +1298,7 @@ async function adminDelistTask() {
     document.getElementById("delistTaskId").value = "";
     document.getElementById("delistTaskReason").value = "";
     await loadAdminReviews();
+    await loadAdminAssignments();
     await loadMyTasks();
   } catch (error) { notify(error.message); }
 }
@@ -1324,6 +1325,7 @@ async function reviewAction(taskId, slotId, action) {
 
     notify("Действие выполнено.");
     await loadAdminReviews();
+    await loadAdminAssignments();
     await loadProfile();
   } catch (error) {
     notify(error.message);
