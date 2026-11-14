@@ -39,6 +39,17 @@ SCHEMA = [
     """,
 
     """
+    CREATE TABLE IF NOT EXISTS platform_revenue (
+        id BIGSERIAL PRIMARY KEY,
+        idempotency_key TEXT NOT NULL UNIQUE,
+        event_type TEXT NOT NULL,
+        source_id BIGINT,
+        amount_kopecks BIGINT NOT NULL CHECK (amount_kopecks > 0),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    """,
+
+    """
     CREATE TABLE IF NOT EXISTS tasks (
         id BIGSERIAL PRIMARY KEY,
         customer_id BIGINT NOT NULL REFERENCES users(telegram_id),
