@@ -106,6 +106,10 @@ SCHEMA = [
     """,
 
     """
+    ALTER TABLE task_slots ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ
+    """,
+
+    """
     CREATE INDEX IF NOT EXISTS idx_slot_assignments_executor
     ON task_slot_assignments(executor_id, assigned_at DESC)
     """,
