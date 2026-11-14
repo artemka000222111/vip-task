@@ -1445,7 +1445,7 @@ async function loadAdminAssignments() {
     const data = await api("/api/admin/assignments");
     const assignments = data.assignments || [];
     container.innerHTML = assignments.length ? assignments.map(item => {
-      const status = item.outcome || "taken";
+      const status = item.outcome || item.slot_status || "taken";
       const executor = item.first_name || item.username || "Пользователь";
       return `
         <div class="panel">
@@ -1456,7 +1456,7 @@ async function loadAdminAssignments() {
           <div class="small">Заказ №${item.task_id} · Место №${item.slot_id}</div>
           <div class="small">Исполнитель: ${escapeHTML(executor)} · ID ${item.executor_id}</div>
           <div class="small">Начало: ${new Date(item.assigned_at).toLocaleString("ru-RU")}</div>
-          ${item.deadline_at && !item.ended_at ? `<div class="small">Срок: ${new Date(item.deadline_at).toLocaleString("ru-RU")}</div>` : ""}
+          ${item.deadline_at && !item.ended_at && (status === "taken" || status === "revision") ? `<div class="small">Срок: ${new Date(item.deadline_at).toLocaleString("ru-RU")}</div>` : ""}
           ${item.ended_at ? `<div class="small">Завершено: ${new Date(item.ended_at).toLocaleString("ru-RU")}</div>` : ""}
           ${item.reason ? `<div class="notice">${escapeHTML(item.reason)}</div>` : ""}
           ${!item.ended_at ? `<button class="btn danger" onclick="adminRemoveExecutor(${item.task_id},${item.slot_id})">Снять исполнителя</button>` : ""}
