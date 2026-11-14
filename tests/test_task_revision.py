@@ -133,7 +133,7 @@ class TaskRevisionIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 await conn.execute(f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE')
             await self.admin_pool.close()
 
-    async def test_manual_executor_removal_frees_slot_without_task_ban(self):
+    async def test_manual_executor_removal_frees_slot_and_bans_from_order(self):
         with patch(
             "tasks.require_admin",
             new=AsyncMock(return_value={"id": self.admin_id}),
@@ -176,7 +176,7 @@ class TaskRevisionIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(assignment["outcome"], "removed")
         self.assertIsNotNone(assignment["ended_at"])
         self.assertEqual(assignment["reason"], "Проверка работы")
-        self.assertFalse(is_banned)
+        self.assertTrue(is_banned)
         self.assertEqual(reserved, 1000)
 
     async def test_revision_resubmission_preserves_one_revision_and_clears_deadline(self):
