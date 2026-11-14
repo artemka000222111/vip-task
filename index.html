@@ -3,15 +3,22 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#080d19">
 <title>VIP TASK</title>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
 <style>
 :root {
   --bg: #080d19;
   --card: #151f32;
+  --card2: #101827;
   --green: #c6ff00;
   --white: #f5f7fb;
   --muted: #8994a8;
+  --border: #293850;
+  --red: #ff6262;
 }
 * { box-sizing: border-box; }
 body {
@@ -19,55 +26,66 @@ body {
   background: var(--bg);
   color: var(--white);
   font-family: Arial, sans-serif;
-  padding-bottom: 85px;
+  padding-bottom: 100px;
 }
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
 header {
-  padding: 24px 20px 15px;
+  padding: 20px 18px 12px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
 }
-.logo { font-size: 25px; font-weight: 900; }
+.logo { font-size: 24px; font-weight: 900; }
 .logo span { color: var(--green); }
 .balance {
   background: var(--card);
-  padding: 10px 14px;
+  border: 1px solid var(--border);
   border-radius: 12px;
+  padding: 10px 12px;
   font-weight: bold;
 }
 .balance span { color: var(--green); }
-main { padding: 10px 18px; }
-h1 { font-size: 27px; margin-bottom: 8px; }
-.subtitle { color: var(--muted); font-size: 14px; }
+main { padding: 12px 17px 25px; }
+.page { display: none; }
+.page.active { display: block; }
+h1 { font-size: 26px; margin: 8px 0; }
+h2 { font-size: 19px; }
+.subtitle { color: var(--muted); font-size: 13px; line-height: 1.5; }
 .hero {
-  margin: 22px 0;
-  padding: 23px;
+  margin: 20px 0;
+  padding: 22px;
   border-radius: 20px;
   background: linear-gradient(135deg,#1d2b42,#111a2b);
-  border: 1px solid #293850;
+  border: 1px solid var(--border);
 }
 .hero h2 { margin: 0 0 10px; font-size: 22px; }
 .hero p { color: var(--muted); font-size: 14px; line-height: 1.5; }
-button {
+.btn {
   border: 0;
   border-radius: 12px;
   background: var(--green);
   color: #101510;
-  padding: 13px 18px;
+  padding: 13px 17px;
   font-weight: 800;
   font-size: 14px;
-  cursor: pointer;
+  width: 100%;
 }
-.section-title {
-  font-size: 19px;
-  margin: 27px 0 14px;
+.btn.secondary {
+  background: #26344a;
+  color: var(--white);
 }
-.task {
+.btn.danger {
+  background: #542b35;
+  color: #fff;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.task, .stat, .panel {
   background: var(--card);
-  border: 1px solid #26344a;
+  border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 17px;
-  margin-bottom: 12px;
+  padding: 16px;
+  margin: 12px 0;
 }
 .task-top {
   display: flex;
@@ -75,125 +93,292 @@ button {
   gap: 10px;
 }
 .task h3 { margin: 0 0 9px; font-size: 16px; }
-.task p { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+.task p { color: var(--muted); font-size: 13px; line-height: 1.5; }
 .reward { color: var(--green); font-weight: 900; white-space: nowrap; }
 .tag {
   color: var(--muted);
   font-size: 11px;
   margin-bottom: 10px;
+  text-transform: uppercase;
 }
+.section-title { font-size: 19px; margin: 25px 0 12px; }
 nav {
   position: fixed;
+  z-index: 10;
   bottom: 0;
   left: 0;
   right: 0;
   background: #101827;
-  border-top: 1px solid #29364b;
+  border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-around;
-  padding: 13px 4px calc(13px + env(safe-area-inset-bottom));
+  padding: 9px 2px calc(9px + env(safe-area-inset-bottom));
 }
 nav button {
   background: transparent;
   color: var(--muted);
-  padding: 7px;
-  font-size: 12px;
+  border: 0;
+  padding: 7px 3px;
+  font-size: 11px;
+  flex: 1;
 }
 nav button.active { color: var(--green); }
-.page { display: none; }
-.page.active { display: block; }
 input, textarea, select {
   width: 100%;
   padding: 14px;
-  margin: 8px 0 15px;
+  margin: 7px 0 15px;
   border-radius: 11px;
   border: 1px solid #34435b;
-  background: #101827;
+  background: var(--card2);
   color: white;
   font-size: 15px;
 }
 label { font-size: 13px; color: var(--muted); }
-.stat {
+.stat strong { color: var(--green); font-size: 24px; }
+.tabs {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  margin: 17px 0;
+}
+.tabs button {
+  white-space: nowrap;
   background: var(--card);
-  border-radius: 15px;
-  padding: 18px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+.tabs button.active {
+  background: var(--green);
+  color: #101510;
+  border-color: var(--green);
+  font-weight: bold;
+}
+.notice {
+  background: #17263a;
+  border: 1px solid var(--border);
+  padding: 13px;
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
   margin: 12px 0;
 }
-.stat strong { color: var(--green); font-size: 24px; }
+.empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 30px 12px;
+  font-size: 14px;
+}
+.line {
+  height: 1px;
+  background: var(--border);
+  margin: 14px 0;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 9px 0;
+  font-size: 13px;
+}
+.row span:first-child { color: var(--muted); }
+.small { font-size: 12px; color: var(--muted); }
+.status { color: var(--green); font-size: 12px; font-weight: bold; }
+.error { color: var(--red); }
+.success { color: var(--green); }
+.loading { color: var(--muted); padding: 20px 0; text-align: center; }
+.checkrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 15px 0;
+  color: var(--white);
+  font-size: 13px;
+}
+.checkrow input { width: auto; margin: 0; }
+.hidden { display: none !important; }
 </style>
 </head>
+
 <body>
 
 <header>
   <div class="logo">VIP <span>TASK</span></div>
-  <div class="balance">Баланс: <span id="headerBalance">0 ₽</span></div>
+  <div class="balance">Баланс: <span id="headerBalance">— ₽</span></div>
 </header>
 
 <main>
-  <section id="home" class="page active">
-    <h1>Привет!</h1>
-    <div class="subtitle">Добро пожаловать на VIP TASK</div>
 
-    <div class="hero">
-      <h2>Зарабатывай онлайн</h2>
-      <p>Выполняй задания, участвуй в опросах и получай вознаграждение.</p>
-      <button onclick="showPage('tasks')">Найти задания</button>
+<section id="home" class="page active">
+  <h1 id="hello">Привет!</h1>
+  <div class="subtitle">Добро пожаловать на VIP TASK</div>
+
+  <div class="hero">
+    <h2>Зарабатывай онлайн</h2>
+    <p>Выполняй задания, проходи опросы и получай вознаграждение.</p>
+    <button class="btn" onclick="showPage('tasks')">Найти задания</button>
+  </div>
+
+  <div class="section-title">Твой баланс</div>
+  <div class="stat">
+    <div class="subtitle">Доступно</div>
+    <strong id="homeBalance">— ₽</strong>
+    <div class="row">
+      <span>В резерве</span>
+      <b id="homeReserved">— ₽</b>
     </div>
+  </div>
 
-    <div class="section-title">Популярные задания</div>
-    <div id="homeTasks"></div>
-  </section>
+  <div class="section-title">Свободные задания</div>
+  <div id="homeTasks" class="loading">Загружаем задания...</div>
+</section>
 
-  <section id="tasks" class="page">
-    <h1>Задания</h1>
-    <div class="subtitle">Выбирай задания и получай вознаграждение</div>
-    <div id="allTasks"></div>
-  </section>
 
-  <section id="create" class="page">
-    <h1>Создать задание</h1>
-    <div class="subtitle">Размести свою рекламную кампанию</div>
+<section id="tasks" class="page">
+  <h1>Задания</h1>
+  <div class="subtitle">Выбирай подходящее задание</div>
 
-    <label>Название задания</label>
-    <input id="taskName" placeholder="Например: пройти опрос">
+  <div class="tabs">
+    <button class="active" onclick="loadTasks(this)">Свободные</button>
+  </div>
 
-    <label>Описание</label>
-    <textarea id="taskDescription" rows="4" placeholder="Опиши, что нужно сделать"></textarea>
+  <div id="allTasks" class="loading">Загружаем...</div>
+</section>
 
-    <label>Оплата исполнителю (₽)</label>
-    <input id="taskPrice" type="number" min="1" placeholder="Например: 20">
 
-    <button onclick="createTask()">Создать задание</button>
-    <p class="subtitle">Публикация в этой демоверсии бесплатная.</p>
-  </section>
+<section id="create" class="page">
+  <h1>Создать заказ</h1>
+  <div class="subtitle">Размести задание для исполнителей</div>
 
-  <section id="wallet" class="page">
-    <h1>Кошелёк</h1>
-    <div class="stat">
-      <div class="subtitle">Доступный баланс</div>
-      <strong id="walletBalance">0 ₽</strong>
+  <div class="notice">
+    Стоимость одного выполнения зависит от выбранного типа задания.
+    Вся сумма заказа резервируется на балансе при публикации.
+  </div>
+
+  <form id="createForm">
+    <label>Тип задания</label>
+    <select id="taskAction" required>
+      <option value="survey">Опрос</option>
+      <option value="content_feedback">Честный отзыв о контенте</option>
+      <option value="usability_test">Тестирование сайта или приложения</option>
+    </select>
+
+    <label>Платформа</label>
+    <select id="taskPlatform" required>
+      <option value="TikTok">TikTok</option>
+      <option value="Instagram">Instagram</option>
+      <option value="YouTube">YouTube</option>
+      <option value="Telegram">Telegram</option>
+      <option value="VK">VK</option>
+      <option value="Yandex">Яндекс</option>
+      <option value="Website">Другой сайт</option>
+    </select>
+
+    <label>Название</label>
+    <input id="taskTitle" maxlength="100" minlength="3" placeholder="Например: пройти опрос" required>
+
+    <label>Описание задания</label>
+    <textarea id="taskDescription" rows="4" maxlength="2000" placeholder="Подробно опиши, что нужно сделать" required></textarea>
+
+    <label>Ссылка на материал или сайт</label>
+    <input id="taskUrl" type="url" placeholder="https://..." required>
+
+    <label>Количество исполнителей</label>
+    <input id="taskQuantity" type="number" min="1" max="10000" value="1" required>
+
+    <button class="btn" id="createButton" type="submit">Опубликовать заказ</button>
+  </form>
+  <div id="createMessage" class="small"></div>
+</section>
+
+
+<section id="wallet" class="page">
+  <h1>Кошелёк</h1>
+
+  <div class="stat">
+    <div class="subtitle">Доступный баланс</div>
+    <strong id="walletBalance">— ₽</strong>
+  </div>
+
+  <div class="stat">
+    <div class="subtitle">Зарезервировано в заказах</div>
+    <strong id="walletReserved">— ₽</strong>
+  </div>
+
+  <div class="notice">
+    Минимальное пополнение — 10 ₽.
+    Минимальный вывод — 15 ₽.
+    При выводе удерживается комиссия платформы 10%.
+  </div>
+
+  <div class="section-title">История операций</div>
+  <div id="walletHistory" class="loading">Загружаем историю...</div>
+</section>
+
+
+<section id="profile" class="page">
+  <h1>Профиль</h1>
+
+  <div class="stat">
+    <div class="subtitle">Telegram-аккаунт</div>
+    <strong id="profileName">—</strong>
+    <div class="small" id="profileUsername"></div>
+    <div class="small" id="profileId"></div>
+  </div>
+
+  <div class="section-title">Моя статистика</div>
+  <div class="stat">
+    <div class="row"><span>Создано заказов</span><b id="createdCount">0</b></div>
+    <div class="row"><span>Одобрено выполнений</span><b id="approvedCount">0</b></div>
+    <div class="row"><span>Сейчас в работе</span><b id="activeCount">0</b></div>
+  </div>
+
+  <div class="section-title">Мои заказы</div>
+  <button class="btn secondary" onclick="loadMyTasks()">Открыть мои заказы</button>
+  <div id="myTasks"></div>
+
+  <div class="section-title">Моя работа</div>
+  <div class="tabs">
+    <button class="active" onclick="loadMyWork('active',this)">В работе</button>
+    <button onclick="loadMyWork('approved',this)">Выполнено</button>
+    <button onclick="loadMyWork('all',this)">Всё</button>
+  </div>
+  <div id="myWork"></div>
+
+  <div class="section-title">Уведомления</div>
+  <div class="panel">
+    <label class="checkrow"><input type="checkbox" id="notifyTasks"> Уведомления о заданиях</label>
+    <label class="checkrow"><input type="checkbox" id="notifyWallet"> Уведомления о кошельке</label>
+    <label class="checkrow"><input type="checkbox" id="notifyReviews"> Уведомления о проверках</label>
+    <label class="checkrow"><input type="checkbox" id="notifySystem"> Системные уведомления</label>
+    <button class="btn" onclick="saveNotifications()">Сохранить настройки</button>
+    <div id="notificationMessage" class="small"></div>
+  </div>
+
+  <div id="adminArea" class="hidden">
+    <div class="section-title">Панель администратора</div>
+    <div class="panel">
+      <div class="success">Администратор</div>
+      <p class="small">Доступ подтверждён сервером.</p>
+      <button class="btn secondary" onclick="loadAdminReviews()">Задания на проверку</button>
+      <div id="adminReviews"></div>
     </div>
-    <div class="stat">
-      <div class="subtitle">Минимальный вывод</div>
-      <strong>15 ₽</strong>
-    </div>
-    <button onclick="alert('Заявки на вывод подключим на следующем этапе.')">Заказать вывод</button>
-    <p class="subtitle">Пополнение и выплаты пока не подключены.</p>
-  </section>
+  </div>
+</section>
 
-  <section id="profile" class="page">
-    <h1>Профиль</h1>
-    <div class="stat">
-      <div class="subtitle">Аккаунт</div>
-      <strong>Демо-пользователь</strong>
-    </div>
-    <div class="stat">
-      <div class="subtitle">Статус</div>
-      <strong>Новичок</strong>
-    </div>
-    <p class="subtitle">Позже здесь появятся Telegram-профиль, история заданий и настройки.</p>
-  </section>
+
+<section id="myTasksPage" class="page">
+  <h1>Мои заказы</h1>
+  <div class="subtitle">Статистика и состояние твоих заказов</div>
+  <button class="btn secondary" onclick="showPage('profile')">Назад в профиль</button>
+  <div id="myTasksFull"></div>
+</section>
+
 </main>
+
 
 <nav>
   <button class="active" onclick="showPage('home',this)">Главная</button>
@@ -203,76 +388,497 @@ label { font-size: 13px; color: var(--muted); }
   <button onclick="showPage('profile',this)">Профиль</button>
 </nav>
 
-<script>
-let tasks = [
-  {name:"Пройти короткий опрос",description:"Ответь на вопросы рекламного исследования.",price:20},
-  {name:"Проверить удобство сайта",description:"Посмотри сайт и поделись честным мнением.",price:35},
-  {name:"Протестировать приложение",description:"Проверь функции и сообщи о впечатлениях.",price:50}
-];
 
-function showPage(id, button) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-  if(button) button.classList.add('active');
-  else {
-    const index = ['home','tasks','create','wallet','profile'].indexOf(id);
-    document.querySelectorAll('nav button')[index].classList.add('active');
-  }
+<script>
+const tg = window.Telegram?.WebApp;
+const initData = tg?.initData || "";
+
+if (tg) {
+  tg.ready();
+  tg.expand();
+  tg.setHeaderColor("#080d19");
+  tg.setBackgroundColor("#080d19");
 }
 
-function renderTasks() {
-  const html = tasks.map((task,i) => `
-    <div class="task">
-      <div class="tag">ЗАДАНИЕ #${i+1}</div>
-      <div class="task-top">
-        <h3>${escapeHTML(task.name)}</h3>
-        <div class="reward">+${task.price} ₽</div>
-      </div>
-      <p>${escapeHTML(task.description)}</p>
-      <button onclick="takeTask(${i})">Выполнить</button>
-    </div>
-  `).join('');
-  document.getElementById('allTasks').innerHTML = html;
-  document.getElementById('homeTasks').innerHTML = tasks.slice(0,2).map((task,i) => `
-    <div class="task">
-      <div class="task-top"><h3>${escapeHTML(task.name)}</h3><div class="reward">+${task.price} ₽</div></div>
-      <p>${escapeHTML(task.description)}</p>
-      <button onclick="takeTask(${i})">Выполнить</button>
-    </div>
-  `).join('');
+const headers = {
+  "Content-Type": "application/json",
+  "X-Telegram-Init-Data": initData
+};
+
+let profile = null;
+let currentTasks = [];
+
+function money(value) {
+  return Number(value || 0).toLocaleString("ru-RU", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }) + " ₽";
 }
 
 function escapeHTML(value) {
-  return String(value).replace(/[&<>"']/g, c => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  return String(value ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
   }[c]));
 }
 
-function takeTask(index) {
-  alert('Задание принято в демоверсии. Проверку и начисление подключим позже.');
+function notify(message) {
+  if (tg?.showAlert) tg.showAlert(message);
+  else alert(message);
 }
 
-function createTask() {
-  const name = document.getElementById('taskName').value.trim();
-  const description = document.getElementById('taskDescription').value.trim();
-  const price = Number(document.getElementById('taskPrice').value);
+async function api(path, options = {}) {
+  if (!initData) {
+    throw new Error("Открой VIP TASK через Telegram.");
+  }
 
-  if(!name || !description || !Number.isFinite(price) || price <= 0) {
-    alert('Заполни все поля корректно.');
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      ...headers,
+      ...(options.headers || {})
+    }
+  });
+
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error("Сервер вернул некорректный ответ.");
+  }
+
+  if (!response.ok) {
+    throw new Error(data.detail || "Ошибка сервера.");
+  }
+
+  return data;
+}
+
+function showPage(id, button) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.getElementById(id)?.classList.add("active");
+
+  document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+
+  if (button) {
+    button.classList.add("active");
+  } else {
+    const index = ["home", "tasks", "create", "wallet", "profile"].indexOf(id);
+    if (index >= 0) document.querySelectorAll("nav button")[index].classList.add("active");
+  }
+
+  if (id === "tasks") loadTasks();
+  if (id === "wallet") loadWallet();
+  if (id === "profile") loadProfile();
+}
+
+async function loadProfile() {
+  try {
+    const data = await api("/api/me");
+    profile = data;
+
+    document.getElementById("hello").textContent =
+      "Привет, " + (data.first_name || "друг") + "!";
+
+    document.getElementById("headerBalance").textContent = money(data.available_balance);
+    document.getElementById("homeBalance").textContent = money(data.available_balance);
+    document.getElementById("homeReserved").textContent = money(data.reserved_balance);
+
+    document.getElementById("walletBalance").textContent = money(data.available_balance);
+    document.getElementById("walletReserved").textContent = money(data.reserved_balance);
+
+    document.getElementById("profileName").textContent = data.first_name || "Пользователь";
+    document.getElementById("profileUsername").textContent =
+      data.username ? "@" + data.username : "Имя пользователя не указано";
+
+    document.getElementById("profileId").textContent = "ID: " + data.telegram_id;
+    document.getElementById("createdCount").textContent = data.created_tasks;
+    document.getElementById("approvedCount").textContent = data.approved_tasks;
+    document.getElementById("activeCount").textContent = data.active_tasks;
+  } catch (error) {
+    console.error(error);
+    if (!initData) {
+      document.getElementById("hello").textContent = "Открой приложение в Telegram";
+    }
+  }
+}
+
+function taskCard(task) {
+  return `
+    <div class="task">
+      <div class="tag">${escapeHTML(task.platform)} · ${escapeHTML(task.action)}</div>
+      <div class="task-top">
+        <h3>${escapeHTML(task.title)}</h3>
+        <div class="reward">+${money(task.price)}</div>
+      </div>
+      <p>${escapeHTML(task.description)}</p>
+      <div class="row">
+        <span>Свободно мест</span>
+        <b>${task.available_slots}</b>
+      </div>
+      <div class="row">
+        <span>Всего мест</span>
+        <b>${task.total_slots}</b>
+      </div>
+      <button class="btn" onclick="takeTask(${task.id})">Выполнить</button>
+    </div>
+  `;
+}
+
+async function loadTasks(button) {
+  const container = document.getElementById("allTasks");
+  container.innerHTML = '<div class="loading">Загружаем задания...</div>';
+
+  try {
+    const data = await api("/api/tasks");
+    currentTasks = data.tasks || [];
+
+    container.innerHTML = currentTasks.length
+      ? currentTasks.map(taskCard).join("")
+      : '<div class="empty">Пока нет свободных заданий.</div>';
+
+    document.getElementById("homeTasks").innerHTML =
+      currentTasks.length
+        ? currentTasks.slice(0, 2).map(taskCard).join("")
+        : '<div class="empty">Новых заданий пока нет.</div>';
+  } catch (error) {
+    container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
+    document.getElementById("homeTasks").innerHTML =
+      `<div class="empty">${escapeHTML(error.message)}</div>`;
+  }
+}
+
+async function takeTask(id) {
+  if (!confirm("Взять это задание? После принятия у тебя будет один час на выполнение.")) return;
+
+  try {
+    const data = await api(`/api/orders/${id}/take`, {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+
+    notify("Задание принято! Выполни его до " +
+      new Date(data.deadline).toLocaleTimeString("ru-RU", {
+        hour: "2-digit",
+        minute: "2-digit"
+      }));
+
+    await loadTasks();
+    await loadProfile();
+  } catch (error) {
+    notify(error.message);
+  }
+}
+
+document.getElementById("createForm").addEventListener("submit", async event => {
+  event.preventDefault();
+
+  const button = document.getElementById("createButton");
+  const message = document.getElementById("createMessage");
+
+  const payload = {
+    action: document.getElementById("taskAction").value,
+    platform: document.getElementById("taskPlatform").value,
+    title: document.getElementById("taskTitle").value.trim(),
+    description: document.getElementById("taskDescription").value.trim(),
+    target_url: document.getElementById("taskUrl").value.trim(),
+    quantity: Number(document.getElementById("taskQuantity").value)
+  };
+
+  if (!payload.title || !payload.description || !payload.target_url ||
+      !Number.isInteger(payload.quantity) || payload.quantity < 1) {
+    notify("Проверь заполнение формы.");
     return;
   }
 
-  tasks.unshift({name,description,price});
-  renderTasks();
-  document.getElementById('taskName').value = '';
-  document.getElementById('taskDescription').value = '';
-  document.getElementById('taskPrice').value = '';
-  alert('Задание добавлено в демоверсию!');
-  showPage('tasks');
+  button.disabled = true;
+  button.textContent = "Публикуем...";
+  message.textContent = "";
+
+  try {
+    const data = await api("/api/orders/create", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+
+    message.className = "small success";
+    message.textContent =
+      `Заказ №${data.task_id} создан. Сумма резерва: ${money(data.total_price)}.`;
+
+    document.getElementById("createForm").reset();
+
+    await loadProfile();
+    await loadMyTasks();
+    notify("Заказ успешно создан!");
+  } catch (error) {
+    message.className = "small error";
+    message.textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = "Опубликовать заказ";
+  }
+});
+
+async function loadWallet() {
+  const container = document.getElementById("walletHistory");
+  container.innerHTML = '<div class="loading">Загружаем историю...</div>';
+
+  try {
+    const data = await api("/api/wallet/history");
+    const operations = data.operations || [];
+
+    container.innerHTML = operations.length
+      ? operations.map(item => `
+        <div class="panel">
+          <div class="row">
+            <b>${escapeHTML(item.operation)}</b>
+            <strong class="${item.amount >= 0 ? "success" : "error"}">
+              ${item.amount > 0 ? "+" : ""}${money(item.amount)}
+            </strong>
+          </div>
+          <div class="small">${escapeHTML(item.description || "")}</div>
+          <div class="small">${new Date(item.created_at).toLocaleString("ru-RU")}</div>
+        </div>
+      `).join("")
+      : '<div class="empty">Операций пока нет.</div>';
+
+    await loadProfile();
+  } catch (error) {
+    container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
+  }
 }
 
-renderTasks();
+async function loadMyTasks() {
+  const targets = [
+    document.getElementById("myTasks"),
+    document.getElementById("myTasksFull")
+  ];
+
+  targets.forEach(el => {
+    if (el) el.innerHTML = '<div class="loading">Загружаем заказы...</div>';
+  });
+
+  try {
+    const data = await api("/api/my/tasks");
+    const tasks = data.tasks || [];
+
+    const html = tasks.length ? tasks.map(task => `
+      <div class="task">
+        <div class="task-top">
+          <h3>${escapeHTML(task.title)}</h3>
+          <span class="status">${escapeHTML(task.status)}</span>
+        </div>
+        <div class="row"><span>Платформа</span><b>${escapeHTML(task.platform)}</b></div>
+        <div class="row"><span>Всего мест</span><b>${task.total_slots}</b></div>
+        <div class="row"><span>Свободно</span><b>${task.available_slots}</b></div>
+        <div class="row"><span>В работе</span><b>${task.taken_slots}</b></div>
+        <div class="row"><span>На проверке</span><b>${task.pending_review_slots}</b></div>
+        <div class="row"><span>Одобрено</span><b>${task.approved_slots}</b></div>
+        <div class="row"><span>В резерве</span><b>${money(task.reserved_balance)}</b></div>
+      </div>
+    `).join("") : '<div class="empty">Ты ещё не создавал заказы.</div>';
+
+    targets.forEach(el => {
+      if (el) el.innerHTML = html;
+    });
+
+    return tasks;
+  } catch (error) {
+    targets.forEach(el => {
+      if (el) el.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
+    });
+  }
+}
+
+async function loadMyWork(tab = "active", button) {
+  const container = document.getElementById("myWork");
+  container.innerHTML = '<div class="loading">Загружаем...</div>';
+
+  if (button) {
+    button.parentElement.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+    button.classList.add("active");
+  }
+
+  try {
+    const data = await api(`/api/my/work?tab=${encodeURIComponent(tab)}`);
+    const work = data.work || [];
+
+    container.innerHTML = work.length ? work.map(item => `
+      <div class="task">
+        <div class="task-top">
+          <h3>${escapeHTML(item.title)}</h3>
+          <div class="reward">${money(item.price)}</div>
+        </div>
+        <div class="tag">${escapeHTML(item.platform)} · ${escapeHTML(item.action)}</div>
+        <div class="row"><span>Статус</span><b>${escapeHTML(item.status)}</b></div>
+        <div class="row"><span>Срок</span><b>${item.deadline_at ? new Date(item.deadline_at).toLocaleString("ru-RU") : "—"}</b></div>
+        ${item.admin_reason ? `<div class="notice">Комментарий администратора: ${escapeHTML(item.admin_reason)}</div>` : ""}
+        ${item.status === "taken" || item.status === "revision" ? `
+          <button class="btn" onclick="submitWork(${item.task_id},${item.slot_id})">
+            ${item.status === "revision" ? "Отправить доработку" : "Отправить результат"}
+          </button>
+        ` : ""}
+      </div>
+    `).join("") : '<div class="empty">Здесь пока пусто.</div>';
+  } catch (error) {
+    container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
+  }
+}
+
+async function submitWork(taskId, slotId) {
+  const proofUrl = prompt("Вставь ссылку на результат выполнения:");
+
+  if (!proofUrl) return;
+
+  const screenshotId = prompt(
+    "Введи Telegram file_id скриншота. Загрузку скриншотов через интерфейс подключим отдельным следующим шагом."
+  );
+
+  if (!screenshotId) return;
+
+  try {
+    await api(`/api/orders/${taskId}/slots/${slotId}/submit`, {
+      method: "POST",
+      body: JSON.stringify({
+        proof_url: proofUrl.trim(),
+        screenshot_file_id: screenshotId.trim()
+      })
+    });
+
+    notify("Результат отправлен на проверку.");
+    await loadMyWork("active");
+  } catch (error) {
+    notify(error.message);
+  }
+}
+
+async function loadNotifications() {
+  try {
+    const data = await api("/api/notifications");
+
+    document.getElementById("notifyTasks").checked = data.task_notifications;
+    document.getElementById("notifyWallet").checked = data.wallet_notifications;
+    document.getElementById("notifyReviews").checked = data.review_notifications;
+    document.getElementById("notifySystem").checked = data.system_notifications;
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function saveNotifications() {
+  const payload = {
+    task_notifications: document.getElementById("notifyTasks").checked,
+    wallet_notifications: document.getElementById("notifyWallet").checked,
+    review_notifications: document.getElementById("notifyReviews").checked,
+    system_notifications: document.getElementById("notifySystem").checked
+  };
+
+  const message = document.getElementById("notificationMessage");
+
+  try {
+    await api("/api/notifications", {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+
+    message.className = "small success";
+    message.textContent = "Настройки сохранены.";
+  } catch (error) {
+    message.className = "small error";
+    message.textContent = error.message;
+  }
+}
+
+async function checkAdmin() {
+  try {
+    const data = await api("/api/admin/status");
+    if (data.is_admin) {
+      document.getElementById("adminArea").classList.remove("hidden");
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function loadAdminReviews() {
+  const container = document.getElementById("adminReviews");
+  container.innerHTML = '<div class="loading">Загружаем проверки...</div>';
+
+  try {
+    const data = await api("/api/orders/admin/reviews");
+    const reviews = data.reviews || [];
+
+    container.innerHTML = reviews.length ? reviews.map(item => `
+      <div class="task">
+        <h3>${escapeHTML(item.title)}</h3>
+        <div class="small">Заказ №${item.task_id} · Исполнитель ${item.executor_id}</div>
+        <p>${escapeHTML(item.proof_url)}</p>
+        <div class="small">ID скриншота: ${escapeHTML(item.screenshot_file_id)}</div>
+        <div class="line"></div>
+        <button class="btn" onclick="reviewAction(${item.task_id},${item.slot_id},'approve')">Одобрить</button>
+        <div style="height:8px"></div>
+        <button class="btn secondary" onclick="reviewAction(${item.task_id},${item.slot_id},'revision')">На доработку</button>
+        <div style="height:8px"></div>
+        <button class="btn danger" onclick="reviewAction(${item.task_id},${item.slot_id},'reject')">Отклонить</button>
+      </div>
+    `).join("") : '<div class="empty">Нет заданий на проверке.</div>';
+  } catch (error) {
+    container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
+  }
+}
+
+async function reviewAction(taskId, slotId, action) {
+  let reason = "";
+
+  if (action !== "approve") {
+    reason = prompt(
+      action === "revision"
+        ? "Укажи, что нужно исправить:"
+        : "Укажи причину отказа:"
+    );
+
+    if (!reason || reason.trim().length < 3) return;
+  }
+
+  if (!confirm("Подтвердить действие?")) return;
+
+  try {
+    await api(`/api/orders/${taskId}/slots/${slotId}/${action}`, {
+      method: "POST",
+      body: JSON.stringify(action === "approve" ? {} : { reason: reason.trim() })
+    });
+
+    notify("Действие выполнено.");
+    await loadAdminReviews();
+    await loadProfile();
+  } catch (error) {
+    notify(error.message);
+  }
+}
+
+async function initialize() {
+  if (!initData) {
+    document.getElementById("hello").textContent = "Открой VIP TASK через Telegram";
+    document.getElementById("homeTasks").innerHTML =
+      '<div class="empty">Для входа открой Mini App из своего Telegram-бота.</div>';
+    document.getElementById("allTasks").innerHTML =
+      '<div class="empty">Авторизация доступна внутри Telegram.</div>';
+    return;
+  }
+
+  await loadProfile();
+  await loadTasks();
+  await loadNotifications();
+  await checkAdmin();
+  await loadMyTasks();
+  await loadMyWork("active");
+}
+
+initialize();
 </script>
+
 </body>
 </html>
