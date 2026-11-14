@@ -1105,6 +1105,7 @@ async function loadMyTasks() {
           <h3>${escapeHTML(task.title)}</h3>
           <span class="status">${escapeHTML(task.status)}</span>
         </div>
+        <div class="small">Заказ №${task.id}</div>
         <div class="row"><span>Платформа</span><b>${escapeHTML(task.platform)}</b></div>
         <div class="row"><span>Всего мест</span><b>${task.total_slots}</b></div>
         <div class="row"><span>Свободно</span><b>${task.available_slots}</b></div>
