@@ -710,7 +710,7 @@ async function loadTasks(tab = "free", button) {
 
     container.innerHTML = currentTasks.length
       ? currentTasks.map(task => taskCard(task, tab)).join("")
-      : '<div class="empty">${tab === "free" ? "Пока нет свободных заданий." : tab === "active" ? "Нет заданий в работе." : "Нет заданий на проверке."}</div>';
+      : `<div class="empty">${tab === "free" ? "Пока нет свободных заданий." : tab === "active" ? "Нет заданий в работе." : "Нет заданий на проверке."}</div>`;
 
     if (tab === "free") {
       document.getElementById("homeTasks").innerHTML =
