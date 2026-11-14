@@ -260,6 +260,18 @@ async def upload_media(request: Request, file: UploadFile = File(...)):
             "Не удалось передать изображение администратору. Проверь, что бот может писать администратору.",
         )
 
+    async with request.app.state.db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO uploaded_media (file_id, telegram_id)
+            VALUES ($1, $2)
+            ON CONFLICT (file_id) DO UPDATE
+            SET telegram_id = EXCLUDED.telegram_id
+            """,
+            uploaded_file_id,
+            telegram_id,
+        )
+
     return {"success": True, "file_id": uploaded_file_id}
 
 
