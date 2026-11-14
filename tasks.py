@@ -133,7 +133,8 @@ async def expire_overdue_slots(conn):
         SELECT
             s.id,
             s.task_id,
-            s.executor_id
+            s.executor_id,
+            t.title
         FROM task_slots s
         JOIN tasks t ON t.id = s.task_id
         WHERE s.status IN ('taken', 'revision')
@@ -144,9 +145,17 @@ async def expire_overdue_slots(conn):
         """
     )
 
+    notifications = []
+
     for slot in expired:
         if slot["executor_id"] is None:
             continue
+
+        notifications.append({
+            "executor_id": slot["executor_id"],
+            "task_id": slot["task_id"],
+            "title": slot["title"],
+        })
 
         await conn.execute(
             """
@@ -187,7 +196,19 @@ async def expire_overdue_slots(conn):
             slot["id"],
         )
 
-    return len(expired)
+    return notifications
+
+
+async def notify_expired_executors(app, expired_slots):
+    for item in expired_slots:
+        await notify_user(
+            app,
+            item["executor_id"],
+            "task",
+            "⌛ Время выполнения задания истекло.\\n\\n"
+            f"Заказ №{item['task_id']}: {item['title']}\\n"
+            "Место освобождено, повторно взять этот заказ ты не сможешь.",
+        )
 
 
 # ==========================================
