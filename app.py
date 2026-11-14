@@ -309,7 +309,7 @@ async def lifespan(app: FastAPI):
         bot = Bot(token=token)
         app.state.bot = bot
 
-        await bot.delete_webhook(drop_pending_updates=True)
+        await bot.delete_webhook(drop_pending_updates=False)
 
         expiration_task = asyncio.create_task(
             expiration_loop(db_pool, app)
