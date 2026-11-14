@@ -444,6 +444,12 @@ label {font-size:13px;color:var(--muted)}
     </div>
 
     <div class="panel">
+      <div class="section-title">История исполнителей</div>
+      <button class="btn secondary" onclick="loadAdminAssignments()">Обновить историю</button>
+      <div id="adminAssignments"></div>
+    </div>
+
+    <div class="panel">
       <div class="section-title">Пополнения</div>
       <button class="btn secondary" onclick="loadAdminTopups()">Обновить заявки</button>
       <div id="adminTopups"></div>
@@ -1405,6 +1411,35 @@ document.getElementById("sbpForm").addEventListener("submit", async event => {
     message.textContent = error.message;
   }
 });
+
+async function loadAdminAssignments() {
+  const container = document.getElementById("adminAssignments");
+  container.innerHTML = '<div class="loading">Загружаем историю...</div>';
+
+  try {
+    const data = await api("/api/admin/assignments");
+    const assignments = data.assignments || [];
+    container.innerHTML = assignments.length ? assignments.map(item => {
+      const status = item.outcome || "taken";
+      const executor = item.first_name || item.username || "Пользователь";
+      return `
+        <div class="panel">
+          <div class="row">
+            <b>${escapeHTML(item.title)}</b>
+            <span class="status">${escapeHTML(workStatusText(status))}</span>
+          </div>
+          <div class="small">Заказ №${item.task_id} · Место №${item.slot_id}</div>
+          <div class="small">Исполнитель: ${escapeHTML(executor)} · ID ${item.executor_id}</div>
+          <div class="small">Начало: ${new Date(item.assigned_at).toLocaleString("ru-RU")}</div>
+          ${item.ended_at ? `<div class="small">Завершено: ${new Date(item.ended_at).toLocaleString("ru-RU")}</div>` : ""}
+          ${item.reason ? `<div class="notice">${escapeHTML(item.reason)}</div>` : ""}
+        </div>
+      `;
+    }).join("") : '<div class="empty">История пока пуста.</div>';
+  } catch (error) {
+    container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
+  }
+}
 
 async function loadAdminActions() {
   const container = document.getElementById("adminActions");
