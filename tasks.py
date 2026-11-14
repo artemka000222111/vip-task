@@ -518,6 +518,15 @@ async def submit_task(
         async with conn.transaction():
 
 
+            task_guard = await conn.fetchrow(
+                "SELECT id, status FROM tasks WHERE id = $1 FOR UPDATE",
+                task_id,
+            )
+            if not task_guard:
+                raise HTTPException(404, "Заказ не найден")
+            if task_guard["status"] != "active":
+                raise HTTPException(409, "Заказ не активен")
+
             slot = await conn.fetchrow(
                 """
                 SELECT
@@ -740,6 +749,15 @@ async def approve_task(
 
     async with pool.acquire() as conn:
         async with conn.transaction():
+
+            task_guard = await conn.fetchrow(
+                "SELECT id, status FROM tasks WHERE id = $1 FOR UPDATE",
+                task_id,
+            )
+            if not task_guard:
+                raise HTTPException(404, "Заказ не найден")
+            if task_guard["status"] != "active":
+                raise HTTPException(409, "Заказ не активен")
 
             slot = await conn.fetchrow(
                 """
@@ -1073,6 +1091,15 @@ async def request_revision(
     async with pool.acquire() as conn:
         async with conn.transaction():
 
+            task_guard = await conn.fetchrow(
+                "SELECT id, status FROM tasks WHERE id = $1 FOR UPDATE",
+                task_id,
+            )
+            if not task_guard:
+                raise HTTPException(404, "Заказ не найден")
+            if task_guard["status"] != "active":
+                raise HTTPException(409, "Заказ не активен")
+
             slot = await conn.fetchrow(
                 """
                 SELECT
@@ -1204,6 +1231,15 @@ async def reject_task(
 
     async with pool.acquire() as conn:
         async with conn.transaction():
+
+            task_guard = await conn.fetchrow(
+                "SELECT id, status FROM tasks WHERE id = $1 FOR UPDATE",
+                task_id,
+            )
+            if not task_guard:
+                raise HTTPException(404, "Заказ не найден")
+            if task_guard["status"] != "active":
+                raise HTTPException(409, "Заказ не активен")
 
             slot = await conn.fetchrow(
                 """
@@ -1352,6 +1388,15 @@ async def remove_executor(
 
     async with pool.acquire() as conn:
         async with conn.transaction():
+
+            task_guard = await conn.fetchrow(
+                "SELECT id, status FROM tasks WHERE id = $1 FOR UPDATE",
+                task_id,
+            )
+            if not task_guard:
+                raise HTTPException(404, "Заказ не найден")
+            if task_guard["status"] != "active":
+                raise HTTPException(409, "Заказ не активен")
 
             slot = await conn.fetchrow(
                 """
