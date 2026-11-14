@@ -51,3 +51,5 @@ jobs:
           Path("/tmp/vip-task.js").write_text("\n".join(scripts), encoding="utf-8")
           PY
           node --check /tmp/vip-task.js
+      - name: Build production Docker image
+        run: docker build --tag vip-task:ci .
