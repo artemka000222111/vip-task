@@ -394,6 +394,24 @@ async def health():
             content={
                 "status": "error",
                 "database": "not connected",
+                "telegram_bot": "unknown",
+            },
+        )
+
+    if (
+        bot is None
+        or polling_task is None
+        or polling_task.done()
+        or expiration_task is None
+        or expiration_task.done()
+    ):
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "error",
+                "database": "not checked",
+                "telegram_bot": "not running",
+                "expiration_worker": "not running",
             },
         )
 
@@ -404,6 +422,8 @@ async def health():
         return {
             "status": "ok",
             "database": "connected",
+            "telegram_bot": "running",
+            "expiration_worker": "running",
         }
 
     except Exception:
