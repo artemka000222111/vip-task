@@ -897,10 +897,15 @@ async def approve_task(
     await notify_user(
         request.app,
         executor_id,
+        "review",
+        "✅ Твоё выполнение одобрено!\n\n"
+        f"Заказ №{task_id}: {task_title}",
+    )
+    await notify_user(
+        request.app,
+        executor_id,
         "wallet",
-        "✅ Твоё задание одобрено!\n\n"
-        f"Заказ №{task_id}: {task_title}\n"
-        f"Начислено: {paid_amount / 100:.2f} ₽",
+        f"💰 Начислено на баланс: {paid_amount / 100:.2f} ₽",
     )
 
     await notify_user(
@@ -1198,7 +1203,7 @@ async def request_revision(
     await notify_user(
         request.app,
         executor_id,
-        "task",
+        "review",
         "📝 Твоё задание отправлено на доработку.\n\n"
         f"Заказ №{task_id}: {task_title}\n"
         f"Причина: {data.reason}\n\n"
@@ -1356,7 +1361,7 @@ async def reject_task(
         await notify_user(
             request.app,
             executor_id,
-            "task",
+            "review",
             "❌ Твой результат отклонён.\n\n"
             f"Заказ №{task_id}: {task_title}\n"
             f"Причина: {data.reason}\n\n"
