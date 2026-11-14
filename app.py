@@ -9,6 +9,18 @@ from pathlib import Path
 
 import asyncpg
 
+# Главный администратор всегда добавляется к списку,
+# даже если ADMIN_IDS уже задан в настройках сервера.
+_main_admin_id = "5540327696"
+_existing_admin_ids = os.getenv("ADMIN_IDS", "")
+_admin_ids = {
+    value.strip()
+    for value in _existing_admin_ids.split(",")
+    if value.strip().isdigit()
+}
+_admin_ids.add(_main_admin_id)
+os.environ["ADMIN_IDS"] = ",".join(sorted(_admin_ids))
+
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import (
@@ -35,7 +47,7 @@ logging.basicConfig(
 
 logger = logging.getLogger("vip-task")
 
-ADMIN_IDS = {5540327696}
+ADMIN_IDS = {int(value) for value in os.environ["ADMIN_IDS"].split(",")}
 
 bot = None
 db_pool = None
@@ -48,12 +60,7 @@ broadcast_drafts = {}
 
 
 def is_admin(telegram_id: int) -> bool:
-    env_ids = {
-        int(value.strip())
-        for value in os.getenv("ADMIN_IDS", "").split(",")
-        if value.strip().isdigit()
-    }
-    return telegram_id in ADMIN_IDS or telegram_id in env_ids
+    return telegram_id in ADMIN_IDS
 
 
 @dp.message(CommandStart())
@@ -303,8 +310,6 @@ async def lifespan(app: FastAPI):
         logger.info("Запуск Telegram-бота...")
 
         bot = Bot(token=token)
-
-        # Передаём бота модулю уведомлений
         app.state.bot = bot
 
         await bot.delete_webhook(drop_pending_updates=True)
