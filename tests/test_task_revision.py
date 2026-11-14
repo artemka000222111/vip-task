@@ -51,13 +51,6 @@ class TaskRevisionIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     (self.admin_id, "Revision test admin"),
                 ],
             )
-            await conn.execute(
-                """
-                INSERT INTO uploaded_media (file_id, telegram_id)
-                VALUES ($1, $2)
-                """,
-                self.executor_id,
-            )
             self.task_id = await conn.fetchval(
                 """
                 INSERT INTO tasks (
