@@ -680,6 +680,18 @@ async def submit_task(
                 slot_id,
             )
 
+            await conn.execute(
+                """
+                UPDATE task_slot_assignments
+                SET deadline_at = NULL
+                WHERE slot_id = $1
+                  AND executor_id = $2
+                  AND ended_at IS NULL
+                """,
+                slot_id,
+                executor_id,
+            )
+
             task_title = slot["title"]
 
     await notify_admins(
