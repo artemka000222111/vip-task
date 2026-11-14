@@ -1188,6 +1188,19 @@ async def request_revision(
                 slot_id,
             )
 
+            await conn.execute(
+                """
+                UPDATE task_slot_assignments
+                SET deadline_at = $1
+                WHERE slot_id = $2
+                  AND executor_id = $3
+                  AND ended_at IS NULL
+                """,
+                deadline,
+                slot_id,
+                slot["executor_id"],
+            )
+
             await log_admin_action(
                 conn,
                 admin_id,
