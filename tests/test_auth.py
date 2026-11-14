@@ -43,7 +43,7 @@ class TelegramAuthTests(unittest.TestCase):
         with patch.dict("os.environ", {"BOT_TOKEN": TOKEN}), patch(
             "auth.time.time", return_value=1_800_000_100
         ):
-            with self.assertRaisesRegex(ValueError, "подпись"):
+            with self.assertRaisesRegex(ValueError, "(?i)подпись"):
                 verify_telegram_init_data(init_data)
 
     def test_rejects_expired_init_data(self):
