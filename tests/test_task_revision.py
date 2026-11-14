@@ -102,7 +102,7 @@ class TaskRevisionIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await conn.execute(
                 """
                 INSERT INTO uploaded_media (file_id, telegram_id)
-                VALUES ('new-file-id', $1)
+                VALUES ($1, $2)
                 """,
                 self.new_screenshot_file_id,
                 self.executor_id,
