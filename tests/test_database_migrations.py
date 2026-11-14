@@ -48,9 +48,9 @@ class DatabaseMigrationIntegrationTests(unittest.IsolatedAsyncioTestCase):
             slot_id = await conn.fetchval(
                 """
                 INSERT INTO task_slots (
-                    task_id, slot_number, executor_id, status
+                    task_id, slot_number, executor_id, status, deadline_at
                 )
-                VALUES ($1, 1, $2, 'taken')
+                VALUES ($1, 1, $2, 'taken', NOW() + INTERVAL '1 hour')
                 RETURNING id
                 """,
                 task_id,
@@ -77,12 +77,18 @@ class DatabaseMigrationIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 slot_id,
                 executor_id,
             )
+            assignment_deadline = await conn.fetchval(
+                "SELECT deadline_at FROM task_slot_assignments WHERE slot_id = $1 AND executor_id = $2 AND ended_at IS NULL",
+                slot_id,
+                executor_id,
+            )
             migration_count = await conn.fetchval(
                 "SELECT COUNT(*) FROM schema_migrations WHERE version = 1"
             )
 
         self.assertEqual(initial_total, 5000)
         self.assertEqual(assignment_count, 1)
+        self.assertIsNotNone(assignment_deadline)
         self.assertEqual(migration_count, 1)
 
 
