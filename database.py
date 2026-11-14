@@ -140,8 +140,17 @@ SCHEMA = [
     WHERE s.executor_id IS NOT NULL
       AND s.status IN ('taken', 'revision', 'pending_review', 'approved')
       AND NOT EXISTS (
-          SELECT 1 FROM task_slot_assignments a
-          WHERE a.slot_id = s.id AND a.executor_id = s.executor_id
+          SELECT 1
+          FROM task_slot_assignments a
+          WHERE a.slot_id = s.id
+            AND a.executor_id = s.executor_id
+            AND (
+                (s.status = 'approved' AND a.outcome = 'approved')
+                OR (
+                    s.status IN ('taken', 'revision', 'pending_review')
+                    AND a.ended_at IS NULL
+                )
+            )
       )
     """,
 
