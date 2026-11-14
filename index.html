@@ -1038,6 +1038,20 @@ async function loadMyTasks() {
   }
 }
 
+function workStatusText(status) {
+  const labels = {
+    taken:"В работе",
+    revision:"На доработке",
+    pending_review:"На проверке",
+    approved:"Выполнено",
+    expired:"Время истекло",
+    rejected:"Отклонено",
+    removed:"Исполнитель снят",
+    delisted:"Заказ снят"
+  };
+  return labels[status] || status || "—";
+}
+
 async function loadMyWork(tab = "active", button) {
   const container = document.getElementById("myWork");
   container.innerHTML = '<div class="loading">Загружаем...</div>';
@@ -1060,12 +1074,12 @@ async function loadMyWork(tab = "active", button) {
         </div>
         <div class="tag">${escapeHTML(item.platform)} · ${escapeHTML(item.action)}</div>
         <p><a href="${escapeHTML(item.target_url)}" target="_blank" rel="noopener noreferrer">Перейти к заданию ↗</a></p>
-        <div class="row"><span>Статус</span><b>${escapeHTML(item.status)}</b></div>
+        <div class="row"><span>Статус</span><b>${escapeHTML(workStatusText(item.status))}</b></div>
         <div class="row">
           <span>Срок</span>
           <b>${item.deadline_at ? new Date(item.deadline_at).toLocaleString("ru-RU") : "—"}</b>
         </div>
-        ${item.admin_reason ? `<div class="notice">Комментарий администратора: ${escapeHTML(item.admin_reason)}</div>` : ""}
+        ${(item.assignment_reason || item.admin_reason) ? `<div class="notice">Комментарий: ${escapeHTML(item.assignment_reason || item.admin_reason)}</div>` : ""}
         ${item.status === "taken" || item.status === "revision" ? `
           <button class="btn" onclick="submitWork(${item.task_id},${item.slot_id})">
             ${item.status === "revision" ? "Отправить доработку" : "Отправить результат"}
