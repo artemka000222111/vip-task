@@ -372,85 +372,116 @@ async def get_tasks(
     user = await get_user(request)
     telegram_id = int(user["id"])
 
-    if tab != "free":
+    if tab not in ("free", "active", "review"):
         raise HTTPException(400, "Неизвестная вкладка")
 
     pool = request.app.state.db_pool
 
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT
-                t.id,
-                t.platform,
-                t.action,
-                t.title,
-                t.description,
-                t.target_url,
-                t.unit_price_kopecks,
-                t.total_slots,
-                t.created_at,
+        if tab == "free":
+            rows = await conn.fetch(
+                """
+                SELECT
+                    t.id,
+                    t.platform,
+                    t.action,
+                    t.title,
+                    t.description,
+                    t.target_url,
+                    t.unit_price_kopecks,
+                    t.total_slots,
+                    t.created_at,
+                    COUNT(s.id) FILTER (WHERE s.status = 'free') AS available_slots,
+                    COUNT(s.id) FILTER (WHERE s.status IN ('taken', 'revision')) AS taken_slots,
+                    COUNT(s.id) FILTER (WHERE s.status = 'pending_review') AS pending_review_slots,
+                    COUNT(s.id) FILTER (WHERE s.status = 'approved') AS approved_slots
+                FROM tasks t
+                LEFT JOIN task_slots s ON s.task_id = t.id
+                WHERE t.status = 'active'
+                  AND t.customer_id != $1
+                  AND NOT EXISTS (
+                      SELECT 1 FROM task_bans b
+                      WHERE b.task_id = t.id AND b.executor_id = $1
+                  )
+                GROUP BY t.id
+                HAVING COUNT(s.id) FILTER (WHERE s.status = 'free') > 0
+                ORDER BY t.unit_price_kopecks DESC, t.created_at DESC
+                LIMIT 100
+                """,
+                telegram_id,
+            )
+            result = [
+                {
+                    "id": row["id"],
+                    "platform": row["platform"],
+                    "action": row["action"],
+                    "title": row["title"],
+                    "description": row["description"],
+                    "target_url": row["target_url"],
+                    "price": row["unit_price_kopecks"] / 100,
+                    "total_slots": row["total_slots"],
+                    "available_slots": row["available_slots"],
+                    "taken_slots": row["taken_slots"],
+                    "pending_review_slots": row["pending_review_slots"],
+                    "approved_slots": row["approved_slots"],
+                    "created_at": row["created_at"].isoformat(),
+                    "status": "free",
+                    "slot_id": None,
+                    "deadline_at": None,
+                    "admin_reason": None,
+                }
+                for row in rows
+            ]
+        else:
+            statuses = ["taken", "revision"] if tab == "active" else ["pending_review"]
+            rows = await conn.fetch(
+                """
+                SELECT
+                    t.id,
+                    s.id AS slot_id,
+                    s.status,
+                    s.deadline_at,
+                    s.taken_at,
+                    t.platform,
+                    t.action,
+                    t.title,
+                    t.description,
+                    t.target_url,
+                    t.unit_price_kopecks,
+                    t.total_slots,
+                    sub.admin_reason
+                FROM task_slots s
+                JOIN tasks t ON t.id = s.task_id
+                LEFT JOIN submissions sub
+                  ON sub.slot_id = s.id AND sub.executor_id = s.executor_id
+                WHERE s.executor_id = $1
+                  AND s.status = ANY($2::text[])
+                ORDER BY s.deadline_at ASC NULLS LAST, s.taken_at DESC
+                LIMIT 100
+                """,
+                telegram_id,
+                statuses,
+            )
+            result = [
+                {
+                    "id": row["id"],
+                    "slot_id": row["slot_id"],
+                    "platform": row["platform"],
+                    "action": row["action"],
+                    "title": row["title"],
+                    "description": row["description"],
+                    "target_url": row["target_url"],
+                    "price": row["unit_price_kopecks"] / 100,
+                    "total_slots": row["total_slots"],
+                    "available_slots": None,
+                    "status": row["status"],
+                    "deadline_at": row["deadline_at"].isoformat() if row["deadline_at"] else None,
+                    "admin_reason": row["admin_reason"],
+                }
+                for row in rows
+            ]
 
-                COUNT(s.id) FILTER (
-                    WHERE s.status = 'free'
-                ) AS available_slots,
-
-                COUNT(s.id) FILTER (
-                    WHERE s.status IN ('taken', 'revision')
-                ) AS taken_slots,
-
-                COUNT(s.id) FILTER (
-                    WHERE s.status = 'pending_review'
-                ) AS pending_review_slots,
-
-                COUNT(s.id) FILTER (
-                    WHERE s.status = 'approved'
-                ) AS approved_slots
-
-            FROM tasks t
-            LEFT JOIN task_slots s ON s.task_id = t.id
-
-            WHERE t.status = 'active'
-              AND t.customer_id != $1
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM task_bans b
-                  WHERE b.task_id = t.id
-                    AND b.executor_id = $1
-              )
-
-            GROUP BY t.id
-
-            HAVING COUNT(s.id) FILTER (
-                WHERE s.status = 'free'
-            ) > 0
-
-            ORDER BY t.unit_price_kopecks DESC, t.created_at DESC
-            LIMIT 100
-            """,
-            telegram_id,
-        )
-
-    return {
-        "tasks": [
-            {
-                "id": row["id"],
-                "platform": row["platform"],
-                "action": row["action"],
-                "title": row["title"],
-                "description": row["description"],
-                "target_url": row["target_url"],
-                "price": row["unit_price_kopecks"] / 100,
-                "total_slots": row["total_slots"],
-                "available_slots": row["available_slots"],
-                "taken_slots": row["taken_slots"],
-                "pending_review_slots": row["pending_review_slots"],
-                "approved_slots": row["approved_slots"],
-                "created_at": row["created_at"].isoformat(),
-            }
-            for row in rows
-        ]
-    }
+    return {"tasks": result}
 
 
 # ==================================================
