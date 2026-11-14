@@ -100,6 +100,13 @@ class TaskRevisionIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
             await conn.execute(
                 """
+                INSERT INTO uploaded_media (file_id, telegram_id)
+                VALUES ('new-file-id', $1)
+                """,
+                self.executor_id,
+            )
+            await conn.execute(
+                """
                 INSERT INTO submissions (
                     slot_id, executor_id, proof_url, screenshot_file_id,
                     status, revision_count, revision_deadline, admin_reason,
