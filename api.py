@@ -1389,7 +1389,7 @@ async def get_admin_assignments(
             SELECT
                 a.id, a.task_id, a.slot_id, a.executor_id,
                 u.first_name, u.username, t.title,
-                a.assigned_at, a.ended_at, a.outcome, a.reason
+                a.assigned_at, a.deadline_at, a.ended_at, a.outcome, a.reason
             FROM task_slot_assignments a
             JOIN users u ON u.telegram_id = a.executor_id
             JOIN tasks t ON t.id = a.task_id
@@ -1410,6 +1410,7 @@ async def get_admin_assignments(
                 "username": row["username"],
                 "title": row["title"],
                 "assigned_at": row["assigned_at"].isoformat(),
+                "deadline_at": row["deadline_at"].isoformat() if row["deadline_at"] else None,
                 "ended_at": row["ended_at"].isoformat() if row["ended_at"] else None,
                 "outcome": row["outcome"],
                 "reason": row["reason"],
