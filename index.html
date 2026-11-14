@@ -694,7 +694,7 @@ function taskCard(task, tab = "free") {
   `;
 }
 
-async function loadTasks(tab = "free", button) {
+async async function loadTasks(tab = "free", button) {
   const container = document.getElementById("allTasks");
   container.innerHTML = '<div class="loading">Загружаем задания...</div>';
 
@@ -1528,7 +1528,7 @@ document.getElementById("sbpForm").addEventListener("submit", async event => {
   }
 });
 
-async function adminRemoveExecutor(taskId, slotId) {
+async async function adminRemoveExecutor(taskId, slotId) {
   const reason = prompt("Укажи причину снятия исполнителя:");
   if (!reason || reason.trim().length < 3) return;
   if (!confirm("Снять исполнителя с этого места? Место снова станет свободным, резерв останется у заказа.")) return;
