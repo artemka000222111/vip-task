@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel, Field
 
 from api import get_user
-from finance import reserve_funds_tx, payout_tx
+from finance import reserve_funds_tx, payout_tx, release_funds_tx
 from notifications import notify_admins, notify_user
 
 
@@ -788,6 +788,19 @@ async def approve_task(
             await conn.execute(
                 """
                 UPDATE tasks
+                SET status = 'completed', updated_at = NOW()
+                WHERE id = $1 AND status = 'active'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM task_slots
+                      WHERE task_id = $1 AND status <> 'approved'
+                  )
+                """,
+                task_id,
+            )
+
+            await conn.execute(
+                """
+                UPDATE tasks
                 SET reserved_kopecks = GREATEST(
                     reserved_kopecks - $1,
                     0
@@ -835,6 +848,150 @@ async def approve_task(
         "message": "Задание одобрено. Исполнителю начислена полная сумма.",
         "paid": paid_amount / 100,
     }
+
+
+# ==========================================
+# СНЯТИЕ ЗАКАЗА АДМИНИСТРАТОРОМ
+# ==========================================
+
+@router.post("/{task_id}/delist")
+async def delist_task(task_id: int, data: ReviewReasonRequest, request: Request):
+    admin = await require_admin(request)
+    admin_id = int(admin["id"])
+    pool = request.app.state.db_pool
+    executor_ids = []
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            task = await conn.fetchrow(
+                """
+                SELECT id, customer_id, title, status,
+                       initial_total_kopecks, reserved_kopecks
+                FROM tasks WHERE id = $1 FOR UPDATE
+                """,
+                task_id,
+            )
+            if not task:
+                raise HTTPException(404, "Заказ не найден")
+            if task["status"] != "active":
+                raise HTTPException(409, "Заказ уже не активен")
+
+            approved_count = await conn.fetchval(
+                "SELECT COUNT(*) FROM task_slots WHERE task_id = $1 AND status = 'approved'",
+                task_id,
+            )
+            if approved_count:
+                raise HTTPException(409, "Нельзя снять заказ: уже есть одобренные выполнения")
+
+            original = int(task["initial_total_kopecks"])
+            penalty = original * 10 // 100
+            reserved = int(task["reserved_kopecks"])
+            if reserved < penalty:
+                raise HTTPException(409, "Резерв заказа не покрывает штраф. Нужна ручная проверка.")
+
+            refund = reserved - penalty
+            if penalty:
+                wallet = await conn.fetchrow(
+                    "SELECT reserved_kopecks FROM wallets WHERE telegram_id = $1 FOR UPDATE",
+                    task["customer_id"],
+                )
+                if not wallet or wallet["reserved_kopecks"] < penalty:
+                    raise HTTPException(409, "Недостаточно средств в резерве заказчика")
+                await conn.execute(
+                    """
+                    UPDATE wallets SET reserved_kopecks = reserved_kopecks - $1,
+                        updated_at = NOW() WHERE telegram_id = $2
+                    """,
+                    penalty, task["customer_id"],
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO ledger (
+                        telegram_id, amount_kopecks, operation,
+                        idempotency_key, description, related_task_id
+                    ) VALUES ($1, $2, 'task_delist_penalty', $3, $4, $5)
+                    """,
+                    task["customer_id"], -penalty,
+                    f"task:{task_id}:delist_penalty",
+                    "Штраф 10% за снятие заказа", task_id,
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO platform_revenue (
+                        idempotency_key, event_type, source_id, amount_kopecks
+                    ) VALUES ($1, 'task_delist_penalty', $2, $3)
+                    ON CONFLICT (idempotency_key) DO NOTHING
+                    """,
+                    f"task:{task_id}:delist_penalty", task_id, penalty,
+                )
+
+            if refund:
+                await release_funds_tx(
+                    conn, int(task["customer_id"]), refund,
+                    f"task:{task_id}:delist_refund", task_id,
+                )
+
+            rows = await conn.fetch(
+                """
+                SELECT DISTINCT executor_id FROM task_slots
+                WHERE task_id = $1 AND executor_id IS NOT NULL
+                  AND status IN ('taken', 'revision', 'pending_review')
+                """,
+                task_id,
+            )
+            executor_ids = [row["executor_id"] for row in rows]
+
+            await conn.execute(
+                """
+                UPDATE submissions
+                SET status = 'removed', admin_reason = $1,
+                    reviewed_at = NOW(), reviewed_by = $2, updated_at = NOW()
+                WHERE slot_id IN (
+                    SELECT id FROM task_slots WHERE task_id = $3
+                      AND status IN ('taken', 'revision', 'pending_review')
+                ) AND status IN ('pending', 'revision_requested')
+                """,
+                data.reason, admin_id, task_id,
+            )
+            await conn.execute(
+                """
+                UPDATE task_slots SET status = 'cancelled', deadline_at = NULL
+                WHERE task_id = $1 AND status <> 'approved'
+                """,
+                task_id,
+            )
+            await conn.execute(
+                """
+                UPDATE tasks SET status = 'removed', reserved_kopecks = 0,
+                    penalty_kopecks = $1, removal_reason = $2,
+                    removed_at = NOW(), updated_at = NOW()
+                WHERE id = $3
+                """,
+                penalty, data.reason, task_id,
+            )
+            await log_admin_action(
+                conn, admin_id, "delist_task", "task", task_id, data.reason
+            )
+            customer_id = task["customer_id"]
+            title = task["title"]
+
+    await notify_user(
+        request.app, customer_id, "task",
+        "⛔ Твой заказ снят администратором.\\n\\n"
+        f"Заказ №{task_id}: {title}\\n"
+        f"Штраф: {penalty / 100:.2f} ₽\\n"
+        f"Возвращено: {refund / 100:.2f} ₽\\n"
+        f"Причина: {data.reason}",
+    )
+    for executor_id in executor_ids:
+        await notify_user(
+            request.app, executor_id, "task",
+            "⛔ Заказ, над которым ты работал, снят с публикации.\\n\\n"
+            f"Заказ №{task_id}: {title}\\nДальнейшее выполнение невозможно.",
+        )
+
+    return {"success": True, "status": "removed",
+            "penalty": penalty / 100, "refund": refund / 100}
 
 
 # ==========================================
