@@ -37,7 +37,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from database import init_db
 from api import router as api_router
 from tasks import router as tasks_router
-from tasks import expire_overdue_slots
+from tasks import expire_overdue_slots, notify_expired_executors
 
 
 logging.basicConfig(
@@ -258,12 +258,16 @@ async def expiration_loop(pool):
         try:
             async with pool.acquire() as conn:
                 async with conn.transaction():
-                    expired_count = await expire_overdue_slots(conn)
+                    expired_slots = await expire_overdue_slots(conn)
 
-            if expired_count:
+            if expired_slots:
+                await notify_expired_executors(
+                    app=type("AppRef", (), {"state": type("StateRef", (), {"bot": bot, "db_pool": pool})()})(),
+                    expired_slots=expired_slots,
+                )
                 logger.info(
                     "Автоматически освобождено просроченных мест: %s",
-                    expired_count,
+                    len(expired_slots),
                 )
 
         except asyncio.CancelledError:
