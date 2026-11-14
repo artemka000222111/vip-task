@@ -560,8 +560,8 @@ async def get_my_work(
                 a.assigned_at,
                 a.deadline_at AS assignment_deadline_at,
                 a.ended_at,
-                s.taken_at,
-                s.completed_at,
+                CASE WHEN a.outcome = 'approved' THEN s.completed_at ELSE NULL END
+                    AS assignment_completed_at,
                 t.platform,
                 t.action,
                 t.title,
@@ -569,17 +569,14 @@ async def get_my_work(
                 t.target_url,
                 t.unit_price_kopecks,
                 t.status AS task_status,
-                sub.proof_url,
-                sub.screenshot_file_id,
-                sub.status AS submission_status,
-                sub.revision_count,
-                sub.revision_deadline,
                 sub.admin_reason
             FROM task_slot_assignments a
             JOIN task_slots s ON s.id = a.slot_id
             JOIN tasks t ON t.id = a.task_id
             LEFT JOIN submissions sub
-              ON sub.slot_id = s.id AND sub.executor_id = a.executor_id
+              ON sub.slot_id = s.id
+             AND sub.executor_id = a.executor_id
+             AND a.ended_at IS NULL
             WHERE a.executor_id = $1
               AND (
                   $2 = 'all'
@@ -616,12 +613,7 @@ async def get_my_work(
                 "task_status": row["task_status"],
                 "taken_at": row["assigned_at"].isoformat() if row["assigned_at"] else None,
                 "deadline_at": row["assignment_deadline_at"].isoformat() if row["assignment_deadline_at"] else None,
-                "completed_at": row["completed_at"].isoformat() if row["completed_at"] else None,
-                "proof_url": row["proof_url"],
-                "screenshot_file_id": row["screenshot_file_id"],
-                "submission_status": row["submission_status"],
-                "revision_count": row["revision_count"],
-                "revision_deadline": row["revision_deadline"].isoformat() if row["revision_deadline"] else None,
+                "completed_at": row["assignment_completed_at"].isoformat() if row["assignment_completed_at"] else None,
                 "admin_reason": row["admin_reason"],
                 "assignment_reason": row["assignment_reason"],
                 "ended_at": row["ended_at"].isoformat() if row["ended_at"] else None,
