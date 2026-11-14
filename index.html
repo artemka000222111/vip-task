@@ -1085,6 +1085,15 @@ async function loadWalletRequests() {
   }
 }
 
+function orderStatusText(status) {
+  const labels = {
+    active:"Активен",
+    completed:"Завершён",
+    removed:"Снят администратором"
+  };
+  return labels[status] || status || "—";
+}
+
 async function loadMyTasks() {
   const targets = [
     document.getElementById("myTasks"),
@@ -1103,7 +1112,7 @@ async function loadMyTasks() {
       <div class="task">
         <div class="task-top">
           <h3>${escapeHTML(task.title)}</h3>
-          <span class="status">${escapeHTML(task.status)}</span>
+          <span class="status">${escapeHTML(orderStatusText(task.status))}</span>
         </div>
         <div class="small">Заказ №${task.id}</div>
         <div class="row"><span>Платформа</span><b>${escapeHTML(task.platform)}</b></div>
