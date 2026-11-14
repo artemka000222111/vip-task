@@ -1,3 +1,4 @@
+import asyncio
 import os
 import unittest
 import uuid
@@ -81,6 +82,50 @@ class FinanceIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(revenue, 1)
         self.assertEqual(status, "paid")
+
+    async def test_concurrent_withdrawal_approval_records_fee_once(self):
+        user_id = self.base_user_id + 5
+        await self._user(user_id, available=5000)
+
+        request = await create_withdrawal_request(
+            self.pool, user_id, 2500, "Карта 2222"
+        )
+
+        results = await asyncio.gather(
+            approve_withdrawal_request(
+                self.pool, request["request_id"], 5540327696
+            ),
+            approve_withdrawal_request(
+                self.pool, request["request_id"], 5540327696
+            ),
+            return_exceptions=True,
+        )
+
+        self.assertEqual(sum(result is True for result in results), 1)
+        errors = [result for result in results if isinstance(result, Exception)]
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], ValueError)
+
+        async with self.pool.acquire() as conn:
+            revenue = await conn.fetchval(
+                """
+                SELECT COUNT(*) FROM platform_revenue
+                WHERE idempotency_key = $1
+                """,
+                f"withdrawal:{request['request_id']}:platform_fee",
+            )
+            status = await conn.fetchval(
+                "SELECT status FROM withdrawal_requests WHERE id = $1",
+                request["request_id"],
+            )
+            balance = await conn.fetchval(
+                "SELECT available_kopecks FROM wallets WHERE telegram_id = $1",
+                user_id,
+            )
+
+        self.assertEqual(revenue, 1)
+        self.assertEqual(status, "paid")
+        self.assertEqual(balance, 2500)
 
     async def test_withdrawal_rejection_refunds_full_amount_without_fee(self):
         user_id = self.base_user_id + 2
