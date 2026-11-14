@@ -265,8 +265,7 @@ async def upload_media(request: Request, file: UploadFile = File(...)):
             """
             INSERT INTO uploaded_media (file_id, telegram_id)
             VALUES ($1, $2)
-            ON CONFLICT (file_id) DO UPDATE
-            SET telegram_id = EXCLUDED.telegram_id
+            ON CONFLICT (file_id) DO NOTHING
             """,
             uploaded_file_id,
             telegram_id,
@@ -770,6 +769,7 @@ async def create_topup(
         )
 
     sender_name = data.sender_name.strip()
+    proof_file_id = data.proof_file_id.strip() if data.proof_file_id else None
 
     if len(sender_name) < 2:
         raise HTTPException(400, "Укажи имя отправителя")
@@ -778,6 +778,14 @@ async def create_topup(
 
     async with pool.acquire() as conn:
         async with conn.transaction():
+            if proof_file_id:
+                media_owner = await conn.fetchval(
+                    "SELECT telegram_id FROM uploaded_media WHERE file_id = $1",
+                    proof_file_id,
+                )
+                if media_owner != telegram_id:
+                    raise HTTPException(400, "Это изображение не загружено с твоего аккаунта")
+
             sbp = await get_current_sbp(conn)
 
             request_id = await conn.fetchval(
@@ -797,7 +805,7 @@ async def create_topup(
                 telegram_id,
                 amount,
                 sender_name,
-                data.proof_file_id.strip() if data.proof_file_id else None,
+                proof_file_id,
                 sbp["phone"],
                 sbp["bank"],
             )
