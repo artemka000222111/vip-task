@@ -15,6 +15,19 @@ SCHEMA = [
     """,
 
     """
+    CREATE TABLE IF NOT EXISTS uploaded_media (
+        file_id TEXT PRIMARY KEY,
+        telegram_id BIGINT NOT NULL REFERENCES users(telegram_id),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    """,
+
+    """
+    CREATE INDEX IF NOT EXISTS idx_uploaded_media_owner
+    ON uploaded_media(telegram_id, created_at DESC)
+    """,
+
+    """
     CREATE TABLE IF NOT EXISTS wallets (
         telegram_id BIGINT PRIMARY KEY REFERENCES users(telegram_id),
         available_kopecks BIGINT NOT NULL DEFAULT 0
