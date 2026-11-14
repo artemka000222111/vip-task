@@ -614,7 +614,7 @@ function showPage(id, button) {
     if (index >= 0) document.querySelectorAll("nav button")[index].classList.add("active");
   }
 
-  if (id === "tasks") loadTasks();
+  if (id === "tasks") loadTasks("free", document.querySelector("#tasks .tabs button"));
   if (id === "wallet") loadWallet();
   if (id === "profile") loadProfile();
 }
