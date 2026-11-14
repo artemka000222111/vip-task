@@ -8,7 +8,9 @@ import asyncpg
 from starlette.requests import Request
 
 from database import init_db
-from tasks import ReviewReasonRequest, remove_executor
+from fastapi import HTTPException
+
+from tasks import ReviewReasonRequest, delist_task, remove_executor
 
 
 @unittest.skipUnless(os.getenv("DATABASE_URL"), "DATABASE_URL is required")
@@ -111,6 +113,78 @@ class RemoveExecutorIntegrationTests(unittest.IsolatedAsyncioTestCase):
             async with self.admin_pool.acquire() as conn:
                 await conn.execute(f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE')
             await self.admin_pool.close()
+
+    async def test_delist_charges_ten_percent_and_refunds_remaining_reserve(self):
+        with patch(
+            "tasks.require_admin",
+            new=AsyncMock(return_value={"id": self.admin_id}),
+        ), patch("tasks.notify_user", new=AsyncMock()):
+            result = await delist_task(
+                self.task_id,
+                ReviewReasonRequest(reason="Снятие для проверки"),
+                self.request,
+            )
+
+        self.assertEqual(result["status"], "removed")
+        self.assertEqual(result["penalty"], 1000 / 100)
+        self.assertEqual(result["refund"], 9000 / 100)
+
+        async with self.pool.acquire() as conn:
+            wallet = await conn.fetchrow(
+                "SELECT available_kopecks, reserved_kopecks FROM wallets WHERE telegram_id = $1",
+                self.customer_id,
+            )
+            task = await conn.fetchrow(
+                "SELECT status, reserved_kopecks, penalty_kopecks FROM tasks WHERE id = $1",
+                self.task_id,
+            )
+            slot_status = await conn.fetchval(
+                "SELECT status FROM task_slots WHERE id = $1",
+                self.slot_id,
+            )
+            revenue = await conn.fetchval(
+                "SELECT amount_kopecks FROM platform_revenue WHERE idempotency_key = $1",
+                f"task:{self.task_id}:delist_penalty",
+            )
+
+        self.assertEqual(wallet["available_kopecks"], 900)
+        self.assertEqual(wallet["reserved_kopecks"], 100)
+        self.assertEqual(task["status"], "removed")
+        self.assertEqual(task["reserved_kopecks"], 0)
+        self.assertEqual(task["penalty_kopecks"], 100)
+        self.assertEqual(slot_status, "cancelled")
+        self.assertEqual(revenue, 100)
+
+    async def test_delist_is_blocked_if_any_slot_was_approved(self):
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE task_slots SET status = 'approved' WHERE id = $1",
+                self.slot_id,
+            )
+
+        with patch(
+            "tasks.require_admin",
+            new=AsyncMock(return_value={"id": self.admin_id}),
+        ):
+            with self.assertRaises(HTTPException) as error:
+                await delist_task(
+                    self.task_id,
+                    ReviewReasonRequest(reason="Не должно сняться"),
+                    self.request,
+                )
+
+        self.assertEqual(error.exception.status_code, 409)
+        async with self.pool.acquire() as conn:
+            reserve = await conn.fetchval(
+                "SELECT reserved_kopecks FROM wallets WHERE telegram_id = $1",
+                self.customer_id,
+            )
+            status = await conn.fetchval(
+                "SELECT status FROM tasks WHERE id = $1",
+                self.task_id,
+            )
+        self.assertEqual(reserve, 1000)
+        self.assertEqual(status, "active")
 
     async def test_removal_frees_slot_keeps_reserve_without_banning_executor(self):
         with patch(
