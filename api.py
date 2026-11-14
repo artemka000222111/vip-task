@@ -462,7 +462,7 @@ async def get_tasks(
                   ON sub.slot_id = s.id AND sub.executor_id = s.executor_id
                 WHERE s.executor_id = $1
                   AND s.status = ANY($2::text[])
-                ORDER BY s.deadline_at ASC NULLS LAST, s.taken_at DESC
+                ORDER BY t.unit_price_kopecks DESC, s.deadline_at ASC NULLS LAST, s.taken_at DESC
                 LIMIT 100
                 """,
                 telegram_id,
