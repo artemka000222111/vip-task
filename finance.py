@@ -475,7 +475,7 @@ async def approve_withdrawal_request(
         async with conn.transaction():
             request = await conn.fetchrow(
                 """
-                SELECT id, status
+                SELECT id, status, fee_kopecks
                 FROM withdrawal_requests
                 WHERE id = $1
                 FOR UPDATE
@@ -500,6 +500,20 @@ async def approve_withdrawal_request(
                 admin_id,
                 request_id,
             )
+
+            if request["fee_kopecks"] > 0:
+                await conn.execute(
+                    """
+                    INSERT INTO platform_revenue (
+                        idempotency_key, event_type, source_id, amount_kopecks
+                    )
+                    VALUES ($1, 'withdrawal_fee', $2, $3)
+                    ON CONFLICT (idempotency_key) DO NOTHING
+                    """,
+                    f"withdrawal:{request_id}:platform_fee",
+                    request_id,
+                    request["fee_kopecks"],
+                )
 
     return True
 
