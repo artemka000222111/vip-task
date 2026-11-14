@@ -283,6 +283,7 @@ label {font-size:13px;color:var(--muted)}
     <input id="taskQuantity" type="number" min="1" max="10000"
       value="1" required>
 
+    <div class="notice" id="taskPricePreview">Загружаем стоимость задания...</div>
     <button class="btn" id="createButton" type="submit">Опубликовать заказ</button>
   </form>
   <div id="createMessage" class="small"></div>
@@ -709,6 +710,42 @@ async function takeTask(id) {
     notify(error.message);
   }
 }
+
+let taskPrices = {};
+
+function updateTaskPricePreview() {
+  const action = document.getElementById("taskAction").value;
+  const quantity = Number(document.getElementById("taskQuantity").value);
+  const preview = document.getElementById("taskPricePreview");
+  const price = taskPrices[action];
+
+  if (!Number.isFinite(price) || price <= 0) {
+    preview.textContent = "Стоимость этого типа задания пока не настроена. Публикация будет недоступна.";
+    return;
+  }
+
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10000) {
+    preview.textContent = "Укажи количество исполнителей от 1 до 10 000.";
+    return;
+  }
+
+  preview.textContent =
+    "Цена за одного исполнителя: " + money(price) +
+    " · Всего к резервированию: " + money(price * quantity);
+}
+
+async function loadTaskPrices() {
+  try {
+    const data = await api("/api/orders/prices");
+    taskPrices = data.prices || {};
+  } catch (error) {
+    taskPrices = {};
+  }
+  updateTaskPricePreview();
+}
+
+document.getElementById("taskAction").addEventListener("change", updateTaskPricePreview);
+document.getElementById("taskQuantity").addEventListener("input", updateTaskPricePreview);
 
 document.getElementById("createForm").addEventListener("submit", async event => {
   event.preventDefault();
@@ -1503,6 +1540,7 @@ async function initialize() {
   }
 
   await loadProfile();
+  await loadTaskPrices();
   await loadTasks();
   await loadNotifications();
   await checkAdmin();
