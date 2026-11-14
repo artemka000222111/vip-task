@@ -536,6 +536,15 @@ function notify(message) {
   else alert(message);
 }
 
+async function loadAdminMedia(fileId) {
+  if (!fileId) return null;
+  const response = await fetch("/api/admin/media?file_id=" + encodeURIComponent(fileId), {
+    headers:{"X-Telegram-Init-Data":initData}
+  });
+  if (!response.ok) return null;
+  return URL.createObjectURL(await response.blob());
+}
+
 async function uploadImage(file) {
   const form = new FormData();
   form.append("file", file);
@@ -1148,20 +1157,24 @@ async function loadAdminReviews() {
     const data = await api("/api/orders/admin/reviews");
     const reviews = data.reviews || [];
 
-    container.innerHTML = reviews.length ? reviews.map(item => `
-      <div class="task">
-        <h3>${escapeHTML(item.title)}</h3>
-        <div class="small">Заказ №${item.task_id} · Исполнитель ${item.executor_id}</div>
-        <p>${escapeHTML(item.proof_url)}</p>
-        <div class="small">ID скриншота: ${escapeHTML(item.screenshot_file_id)}</div>
-        <div class="line"></div>
-        <button class="btn" onclick="reviewAction(${item.task_id},${item.slot_id},'approve')">Одобрить</button>
-        <div style="height:8px"></div>
-        <button class="btn secondary" onclick="reviewAction(${item.task_id},${item.slot_id},'revision')">На доработку</button>
-        <div style="height:8px"></div>
-        <button class="btn danger" onclick="reviewAction(${item.task_id},${item.slot_id},'reject')">Отклонить</button>
-      </div>
-    `).join("") : '<div class="empty">Нет заданий на проверке.</div>';
+    const cards = await Promise.all(reviews.map(async item => {
+      const imageUrl = await loadAdminMedia(item.screenshot_file_id);
+      return `
+        <div class="task">
+          <h3>${escapeHTML(item.title)}</h3>
+          <div class="small">Заказ №${item.task_id} · Исполнитель ${item.executor_id}</div>
+          <p><a href="${escapeHTML(item.proof_url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(item.proof_url)}</a></p>
+          ${imageUrl ? `<img src="${imageUrl}" alt="Скриншот выполнения" style="width:100%;height:auto;border-radius:12px;margin:8px 0">` : '<div class="small">Скриншот недоступен для просмотра.</div>'}
+          <div class="line"></div>
+          <button class="btn" onclick="reviewAction(${item.task_id},${item.slot_id},'approve')">Одобрить</button>
+          <div style="height:8px"></div>
+          <button class="btn secondary" onclick="reviewAction(${item.task_id},${item.slot_id},'revision')">На доработку</button>
+          <div style="height:8px"></div>
+          <button class="btn danger" onclick="reviewAction(${item.task_id},${item.slot_id},'reject')">Отклонить</button>
+        </div>
+      `;
+    }));
+    container.innerHTML = cards.join("") || '<div class="empty">Нет заданий на проверке.</div>';
   } catch (error) {
     container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
   }
@@ -1226,7 +1239,8 @@ async function loadAdminTopups() {
         <div class="row"><span>Отправитель</span><b>${escapeHTML(item.sender_name)}</b></div>
         <div class="row"><span>Банк получателя</span><b>${escapeHTML(item.sbp_bank)}</b></div>
         <div class="row"><span>Телефон СБП</span><b>${escapeHTML(item.sbp_phone)}</b></div>
-        <div class="small">Подтверждение file_id: ${escapeHTML(item.proof_file_id || "Не приложено")}</div>
+        <div class="small">Подтверждение: ${item.proof_file_id ? "загружено" : "не приложено"}</div>
+        <div id="topup-proof-${item.id}" class="small"></div>
         <div class="small">${new Date(item.created_at).toLocaleString("ru-RU")}</div>
         <div class="action-buttons">
           <button class="btn" onclick="adminTopupAction(${item.id},'approve')">Подтвердить пополнение</button>
@@ -1234,6 +1248,14 @@ async function loadAdminTopups() {
         </div>
       </div>
     `).join("") : '<div class="empty">Нет заявок на пополнение.</div>';
+    for (const item of requests) {
+      if (!item.proof_file_id) continue;
+      const imageUrl = await loadAdminMedia(item.proof_file_id);
+      const target = document.getElementById("topup-proof-" + item.id);
+      if (target && imageUrl) {
+        target.innerHTML = '<img src="' + imageUrl + '" alt="Подтверждение перевода" style="width:100%;height:auto;border-radius:12px;margin:8px 0">';
+      }
+    }
   } catch (error) {
     container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
   }
