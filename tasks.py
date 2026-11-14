@@ -675,8 +675,6 @@ async def get_admin_reviews(request: Request):
     pool = request.app.state.db_pool
 
     async with pool.acquire() as conn:
-        async with conn.transaction():
-
         rows = await conn.fetch(
             """
             SELECT
