@@ -7,9 +7,16 @@ from contextlib import asynccontextmanager
 import asyncpg
 from aiogram import Bot, Dispatcher
 from aiogram.filters import CommandStart
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import (
+    Message,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    WebAppInfo,
+)
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+
+from database import init_db
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vip-task")
@@ -29,13 +36,13 @@ async def start_handler(message: Message):
             inline_keyboard=[[
                 InlineKeyboardButton(
                     text="Открыть VIP TASK",
-                    web_app=WebAppInfo(url=webapp_url)
+                    web_app=WebAppInfo(url=webapp_url),
                 )
             ]]
         )
         await message.answer(
             "Добро пожаловать в VIP TASK!",
-            reply_markup=keyboard
+            reply_markup=keyboard,
         )
     else:
         await message.answer(
@@ -59,16 +66,16 @@ async def lifespan(app: FastAPI):
     db_pool = await asyncpg.create_pool(
         dsn=database_url,
         min_size=1,
-        max_size=10
+        max_size=10,
     )
+
+    await init_db(db_pool)
+    logger.info("База данных инициализирована")
 
     bot = Bot(token=token)
-
     await bot.delete_webhook(drop_pending_updates=True)
 
-    polling_task = asyncio.create_task(
-        dp.start_polling(bot)
-    )
+    polling_task = asyncio.create_task(dp.start_polling(bot))
 
     logger.info("VIP TASK запущен")
 
@@ -93,26 +100,42 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="VIP TASK",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 
 @app.get("/")
 async def home():
-    return {"service": "VIP TASK", "status": "running"}
+    return {
+        "service": "VIP TASK",
+        "status": "running",
+    }
 
 
 @app.get("/health")
 async def health():
+    if db_pool is None:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "database": "not initialized"},
+        )
+
     try:
         async with db_pool.acquire() as connection:
             await connection.fetchval("SELECT 1")
 
-        return {"status": "ok", "database": "connected"}
+        return {
+            "status": "ok",
+            "database": "connected",
+        }
 
     except Exception:
         logger.exception("Health check failed")
         return JSONResponse(
             status_code=503,
-            content={"status": "error", "database": "unavailable"}
+            content={
+                "status": "error",
+                "database": "unavailable",
+            },
         )
+
