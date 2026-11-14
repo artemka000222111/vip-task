@@ -32,7 +32,7 @@ Railway должен собирать приложение по корневом
 ## Проверка после запуска
 
 1. Убедись, что деплой завершился без ошибок.
-2. Открой `https://твой-домен/health`. Ожидаемый ответ: `{"status":"ok","database":"connected"}`.
+2. Открой `https://твой-домен/health`. Ожидаемый ответ: `{"status":"ok","database":"connected","telegram_bot":"running","expiration_worker":"running"}`.
 3. Проверь, что `WEBAPP_URL` совпадает с HTTPS-доменом приложения.
 4. Открой Telegram-бота и отправь `/start`.
 5. Нажми «Открыть VIP TASK». Приложение должно открыться внутри Telegram.
