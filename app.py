@@ -1,13 +1,16 @@
+
 import asyncio
 import logging
 import os
+import html
+
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 import asyncpg
+
 from aiogram import Bot, Dispatcher, F
-from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.types import (
     Message,
     CallbackQuery,
@@ -15,7 +18,7 @@ from aiogram.types import (
     InlineKeyboardButton,
     WebAppInfo,
 )
-
+from aiogram.exceptions import TelegramRetryAfter, TelegramForbiddenError
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse, FileResponse
 
@@ -25,10 +28,6 @@ from tasks import router as tasks_router
 from tasks import expire_overdue_slots
 
 
-# ==========================================
-# LOGGING
-# ==========================================
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -36,36 +35,27 @@ logging.basicConfig(
 
 logger = logging.getLogger("vip-task")
 
-
-# ==========================================
-# BOT
-# ==========================================
+# Главный администратор VIP TASK
+ADMIN_IDS = {5540327696}
 
 bot = None
+db_pool = None
 dp = Dispatcher()
 
 polling_task = None
 expiration_task = None
 
-# Черновики рассылок администраторов.
 broadcast_drafts = {}
 
 
-def get_admin_ids() -> set[int]:
-    return {
+def is_admin(telegram_id: int) -> bool:
+    env_ids = {
         int(value.strip())
         for value in os.getenv("ADMIN_IDS", "").split(",")
         if value.strip().isdigit()
     }
+    return telegram_id in ADMIN_IDS or telegram_id in env_ids
 
-
-def is_admin(telegram_id: int) -> bool:
-    return telegram_id in get_admin_ids()
-
-
-# ==========================================
-# START COMMAND
-# ==========================================
 
 @dp.message(CommandStart())
 async def start_handler(message: Message):
@@ -95,292 +85,168 @@ async def start_handler(message: Message):
         )
 
 
-# ==========================================
-# BROADCAST: START
-# ==========================================
-
-@dp.message(Command("broadcast"))
-async def broadcast_start(message: Message):
-    telegram_id = message.from_user.id
-
-    if not is_admin(telegram_id):
-        await message.answer("У тебя нет доступа к этой команде.")
-        return
-
-    broadcast_drafts.pop(telegram_id, None)
-
+@dp.message(Command("myid"))
+async def myid_handler(message: Message):
     await message.answer(
-        "📢 <b>Создание рассылки VIP TASK</b>\n\n"
-        "Отправь следующим сообщением текст, "
-        "который нужно разослать пользователям.\n\n"
-        "Для отмены напиши /cancel.",
+        f"Твой Telegram ID: <code>{message.from_user.id}</code>",
         parse_mode="HTML",
     )
 
 
-# ==========================================
-# BROADCAST: CANCEL
-# ==========================================
+@dp.message(Command("broadcast"))
+async def broadcast_handler(message: Message):
+    if not is_admin(message.from_user.id):
+        await message.answer("У тебя нет доступа к этой команде.")
+        return
+
+    broadcast_drafts[message.from_user.id] = True
+
+    await message.answer(
+        "Напиши текст рассылки.\n\n"
+        "Для отмены отправь /cancel."
+    )
+
 
 @dp.message(Command("cancel"))
-async def broadcast_cancel(message: Message):
-    telegram_id = message.from_user.id
+async def cancel_handler(message: Message):
+    if not is_admin(message.from_user.id):
+        return
 
-    if telegram_id in broadcast_drafts:
-        broadcast_drafts.pop(telegram_id, None)
+    if broadcast_drafts.pop(message.from_user.id, None):
         await message.answer("Рассылка отменена.")
     else:
-        await message.answer("Нет активного черновика рассылки.")
+        await message.answer("Нет активной рассылки.")
 
-
-# ==========================================
-# BROADCAST: RECEIVE TEXT
-# ==========================================
 
 @dp.message(F.text)
-async def broadcast_receive_text(message: Message):
-    telegram_id = message.from_user.id
+async def broadcast_text_handler(message: Message):
+    admin_id = message.from_user.id
 
-    if telegram_id not in broadcast_drafts and not is_admin(telegram_id):
+    if not is_admin(admin_id):
         return
 
-    if not is_admin(telegram_id):
+    if not broadcast_drafts.get(admin_id):
         return
 
-    if telegram_id not in broadcast_drafts:
+    if message.text.startswith("/"):
         return
 
-    text = message.text.strip()
-
-    if text.startswith("/"):
-        return
-
-    if not text:
-        await message.answer("Текст сообщения пустой. Отправь текст ещё раз.")
-        return
-
-    if len(text) > 4000:
-        await message.answer(
-            "Сообщение слишком длинное. Максимум — 4000 символов."
-        )
-        return
-
-    broadcast_drafts[telegram_id] = text
+    broadcast_drafts.pop(admin_id, None)
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="✅ Подтвердить рассылку",
+                    text="Отправить всем",
                     callback_data="broadcast:confirm",
-                )
-            ],
-            [
+                ),
                 InlineKeyboardButton(
-                    text="❌ Отменить",
+                    text="Отмена",
                     callback_data="broadcast:cancel",
-                )
-            ],
+                ),
+            ]
         ]
     )
 
+    broadcast_drafts[admin_id] = message.text
+
     await message.answer(
-        "📢 <b>Предварительный просмотр</b>\n\n"
-        f"{text}\n\n"
-        "Если всё правильно, подтверди рассылку.",
+        "<b>Предварительный просмотр рассылки:</b>\n\n"
+        + html.escape(message.text),
         reply_markup=keyboard,
         parse_mode="HTML",
     )
 
 
-# ==========================================
-# BROADCAST: SEND
-# ==========================================
+@dp.callback_query(F.data == "broadcast:cancel")
+async def broadcast_cancel_callback(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
 
-async def send_broadcast(
-    telegram_bot: Bot,
-    pool: asyncpg.Pool,
-    text: str,
-    admin_id: int,
-) -> tuple[int, int]:
+    broadcast_drafts.pop(callback.from_user.id, None)
 
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT telegram_id
-            FROM users
-            WHERE is_blocked = FALSE
-            ORDER BY created_at ASC
-            """
-        )
+    await callback.message.edit_text("Рассылка отменена.")
+    await callback.answer()
 
-    successful = 0
-    failed = 0
 
-    total = len(rows)
+@dp.callback_query(F.data == "broadcast:confirm")
+async def broadcast_confirm_callback(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
 
-    logger.info(
-        "Начало рассылки: admin=%s, recipients=%s",
-        admin_id,
-        total,
-    )
+    text = broadcast_drafts.pop(callback.from_user.id, None)
 
-    for row in rows:
-        user_id = int(row["telegram_id"])
+    if not text:
+        await callback.answer("Текст рассылки не найден.", show_alert=True)
+        return
 
-        try:
-            await telegram_bot.send_message(
-                chat_id=user_id,
-                text=text,
+    if db_pool is None or bot is None:
+        await callback.answer("Бот пока не готов.", show_alert=True)
+        return
+
+    await callback.message.edit_text("Рассылка началась...")
+    await callback.answer()
+
+    try:
+        async with db_pool.acquire() as conn:
+            users = await conn.fetch(
+                """
+                SELECT telegram_id
+                FROM users
+                WHERE is_blocked = FALSE
+                ORDER BY created_at ASC
+                """
             )
 
-            successful += 1
+        sent = 0
+        failed = 0
 
-        except TelegramRetryAfter as error:
-            await asyncio.sleep(error.retry_after + 1)
+        for user in users:
+            telegram_id = user["telegram_id"]
 
             try:
-                await telegram_bot.send_message(
-                    chat_id=user_id,
-                    text=text,
-                )
-                successful += 1
+                while True:
+                    try:
+                        await bot.send_message(
+                            chat_id=telegram_id,
+                            text=text,
+                        )
+                        sent += 1
+                        break
+
+                    except TelegramRetryAfter as error:
+                        await asyncio.sleep(error.retry_after + 1)
+
+                await asyncio.sleep(0.05)
+
+            except TelegramForbiddenError:
+                failed += 1
 
             except Exception:
                 failed += 1
-                logger.warning(
-                    "Не удалось отправить сообщение пользователю %s",
-                    user_id,
+                logger.exception(
+                    "Ошибка рассылки пользователю %s",
+                    telegram_id,
                 )
 
-        except TelegramForbiddenError:
-            failed += 1
-
-        except Exception:
-            failed += 1
-            logger.exception(
-                "Ошибка отправки рассылки пользователю %s",
-                user_id,
-            )
-
-        # Не превышаем лимиты Telegram.
-        await asyncio.sleep(0.05)
-
-    logger.info(
-        "Рассылка завершена: admin=%s, total=%s, success=%s, failed=%s",
-        admin_id,
-        total,
-        successful,
-        failed,
-    )
-
-    return successful, failed
-
-
-# ==========================================
-# BROADCAST: CONFIRM / CANCEL BUTTONS
-# ==========================================
-
-@dp.callback_query(F.data.startswith("broadcast:"))
-async def broadcast_callback(callback: CallbackQuery):
-    telegram_id = callback.from_user.id
-
-    if not is_admin(telegram_id):
-        await callback.answer(
-            "Нет доступа.",
-            show_alert=True,
-        )
-        return
-
-    action = callback.data.split(":", 1)[1]
-
-    if action == "cancel":
-        broadcast_drafts.pop(telegram_id, None)
-
-        await callback.answer("Рассылка отменена.")
-
-        if callback.message:
-            await callback.message.edit_text(
-                "❌ Рассылка отменена."
-            )
-
-        return
-
-    if action != "confirm":
-        await callback.answer()
-        return
-
-    text = broadcast_drafts.get(telegram_id)
-
-    if not text:
-        await callback.answer(
-            "Черновик не найден. Создай рассылку заново.",
-            show_alert=True,
-        )
-        return
-
-    pool = getattr(callback.bot, "db_pool", None)
-
-    if pool is None:
-        await callback.answer(
-            "База данных недоступна.",
-            show_alert=True,
-        )
-        return
-
-    # Удаляем черновик до начала отправки,
-    # чтобы исключить повторное нажатие.
-    broadcast_drafts.pop(telegram_id, None)
-
-    await callback.answer("Рассылка началась.")
-
-    if callback.message:
-        await callback.message.edit_text(
-            "⏳ Рассылка началась.\n"
-            "Дождись завершения отправки."
-        )
-
-    try:
-        successful, failed = await send_broadcast(
-            callback.bot,
-            pool,
-            text,
-            telegram_id,
-        )
-
-        report = (
-            "✅ <b>Рассылка завершена!</b>\n\n"
-            f"Всего получателей: {successful + failed}\n"
-            f"Успешно отправлено: {successful}\n"
-            f"Не удалось отправить: {failed}"
-        )
-
-        await callback.bot.send_message(
-            chat_id=telegram_id,
-            text=report,
-            parse_mode="HTML",
+        await callback.message.answer(
+            "Рассылка завершена.\n\n"
+            f"Успешно отправлено: {sent}\n"
+            f"Не доставлено: {failed}\n"
+            f"Всего пользователей: {len(users)}"
         )
 
     except Exception:
-        logger.exception("Критическая ошибка рассылки")
-
-        await callback.bot.send_message(
-            chat_id=telegram_id,
-            text=(
-                "❌ Во время рассылки произошла ошибка. "
-                "Подробности записаны в журнал сервера."
-            ),
+        logger.exception("Ошибка массовой рассылки")
+        await callback.message.answer(
+            "Не удалось выполнить рассылку. Проверь журнал ошибок."
         )
 
 
-# ==========================================
-# AUTOMATIC TASK EXPIRATION
-# ==========================================
-
 async def expiration_loop(pool):
-    logger.info(
-        "Запущена автоматическая проверка сроков заданий"
-    )
+    logger.info("Запущена автоматическая проверка сроков заданий")
 
     while True:
         try:
@@ -398,20 +264,14 @@ async def expiration_loop(pool):
             raise
 
         except Exception:
-            logger.exception(
-                "Ошибка автоматической проверки сроков"
-            )
+            logger.exception("Ошибка автоматической проверки сроков")
 
         await asyncio.sleep(30)
 
 
-# ==========================================
-# APPLICATION LIFESPAN
-# ==========================================
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global bot, polling_task, expiration_task
+    global bot, db_pool, polling_task, expiration_task
 
     token = os.getenv("BOT_TOKEN")
     database_url = os.getenv("DATABASE_URL")
@@ -422,36 +282,28 @@ async def lifespan(app: FastAPI):
     if not database_url:
         raise RuntimeError("Не задана переменная DATABASE_URL")
 
-    pool = None
-
     try:
         logger.info("Подключение к PostgreSQL...")
 
-        pool = await asyncpg.create_pool(
+        db_pool = await asyncpg.create_pool(
             dsn=database_url,
             min_size=1,
             max_size=10,
             command_timeout=60,
         )
 
-        app.state.db_pool = pool
+        app.state.db_pool = db_pool
 
         logger.info("Инициализация базы данных...")
-
-        await init_db(pool)
-
-        logger.info("Запуск автоматической проверки сроков...")
+        await init_db(db_pool)
 
         expiration_task = asyncio.create_task(
-            expiration_loop(pool)
+            expiration_loop(db_pool)
         )
 
         logger.info("Запуск Telegram-бота...")
 
         bot = Bot(token=token)
-
-        # Передаём пул базе данных обработчикам бота.
-        bot.db_pool = pool
 
         await bot.delete_webhook(drop_pending_updates=True)
 
@@ -466,11 +318,8 @@ async def lifespan(app: FastAPI):
     finally:
         logger.info("Остановка VIP TASK...")
 
-        broadcast_drafts.clear()
-
         if expiration_task and not expiration_task.done():
             expiration_task.cancel()
-
             with suppress(asyncio.CancelledError):
                 await expiration_task
 
@@ -478,7 +327,6 @@ async def lifespan(app: FastAPI):
 
         if polling_task and not polling_task.done():
             polling_task.cancel()
-
             with suppress(asyncio.CancelledError):
                 await polling_task
 
@@ -488,15 +336,12 @@ async def lifespan(app: FastAPI):
             await bot.session.close()
             bot = None
 
-        if pool:
-            await pool.close()
+        if db_pool:
+            await db_pool.close()
+            db_pool = None
 
         logger.info("VIP TASK остановлен")
 
-
-# ==========================================
-# FASTAPI
-# ==========================================
 
 app = FastAPI(
     title="VIP TASK",
@@ -505,18 +350,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
-# ==========================================
-# ROUTERS
-# ==========================================
-
 app.include_router(api_router)
 app.include_router(tasks_router)
-
-
-# ==========================================
-# MINI APP
-# ==========================================
 
 BASE_DIR = Path(__file__).resolve().parent
 INDEX_FILE = BASE_DIR / "index.html"
@@ -538,10 +373,6 @@ async def home():
         media_type="text/html",
     )
 
-
-# ==========================================
-# HEALTH CHECK
-# ==========================================
 
 @app.get("/health")
 async def health():
@@ -566,9 +397,7 @@ async def health():
         }
 
     except Exception:
-        logger.exception(
-            "Ошибка проверки базы данных"
-        )
+        logger.exception("Ошибка проверки базы данных")
 
         return JSONResponse(
             status_code=503,
