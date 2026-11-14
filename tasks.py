@@ -1515,17 +1515,6 @@ async def remove_executor(
 
             await conn.execute(
                 """
-                INSERT INTO task_bans (task_id, executor_id, reason)
-                VALUES ($1, $2, $3)
-                ON CONFLICT (task_id, executor_id) DO NOTHING
-                """,
-                task_id,
-                executor_id,
-                data.reason,
-            )
-
-            await conn.execute(
-                """
                 UPDATE task_slot_assignments
                 SET ended_at = NOW(), outcome = 'removed', reason = $1
                 WHERE slot_id = $2 AND executor_id = $3 AND ended_at IS NULL
@@ -1563,7 +1552,7 @@ async def remove_executor(
         "⚠️ Администратор снял тебя с задания.\n\n"
         f"Заказ №{task_id}: {task_title}\n"
         f"Причина: {data.reason}\n\n"
-        "Ты больше не сможешь взять этот заказ. Место освобождено для другого исполнителя.",
+        "Место снова свободно. Ты можешь взять этот заказ повторно, если оно ещё доступно.",
     )
 
     return {
