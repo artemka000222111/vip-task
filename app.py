@@ -14,9 +14,9 @@ from aiogram.types import (
     WebAppInfo,
 )
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 
 from database import init_db
+from api import router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vip-task")
@@ -70,7 +70,8 @@ async def lifespan(app: FastAPI):
     )
 
     await init_db(db_pool)
-    logger.info("База данных инициализирована")
+
+    app.state.db_pool = db_pool
 
     bot = Bot(token=token)
     await bot.delete_webhook(drop_pending_updates=True)
@@ -103,6 +104,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.include_router(router)
+
 
 @app.get("/")
 async def home():
@@ -115,27 +118,16 @@ async def home():
 @app.get("/health")
 async def health():
     if db_pool is None:
-        return JSONResponse(
-            status_code=503,
-            content={"status": "error", "database": "not initialized"},
-        )
-
-    try:
-        async with db_pool.acquire() as connection:
-            await connection.fetchval("SELECT 1")
-
         return {
-            "status": "ok",
-            "database": "connected",
+            "status": "error",
+            "database": "not initialized",
         }
 
-    except Exception:
-        logger.exception("Health check failed")
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "error",
-                "database": "unavailable",
-            },
-        )
+    async with db_pool.acquire() as connection:
+        await connection.fetchval("SELECT 1")
+
+    return {
+        "status": "ok",
+        "database": "connected",
+    }
 
