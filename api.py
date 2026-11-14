@@ -1,7 +1,7 @@
-
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 import os
+import json
 
 from fastapi import APIRouter, Request, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -126,18 +126,24 @@ async def log_admin_action(
         target_type,
         target_id,
         reason,
-        __import__("json").dumps(details or {}, ensure_ascii=False),
+        json.dumps(details or {}, ensure_ascii=False),
     )
 
 
 def rubles_to_kopecks(value: Decimal) -> int:
     try:
         amount = value * 100
+
         if amount != amount.quantize(Decimal("1")):
             raise ValueError()
+
         return int(amount)
+
     except (InvalidOperation, ValueError):
-        raise HTTPException(400, "Укажи сумму в рублях с точностью до копеек")
+        raise HTTPException(
+            400,
+            "Укажи сумму в рублях с точностью до копеек",
+        )
 
 
 # ==================================================
@@ -147,12 +153,18 @@ def rubles_to_kopecks(value: Decimal) -> int:
 class TopupCreateRequest(BaseModel):
     amount: Decimal = Field(gt=0, le=1000000)
     sender_name: str = Field(min_length=2, max_length=100)
-    proof_file_id: Optional[str] = Field(default=None, max_length=500)
+    proof_file_id: Optional[str] = Field(
+        default=None,
+        max_length=500,
+    )
 
 
 class WithdrawalCreateRequest(BaseModel):
     amount: Decimal = Field(gt=0, le=1000000)
-    payout_details: str = Field(min_length=5, max_length=1000)
+    payout_details: str = Field(
+        min_length=5,
+        max_length=1000,
+    )
 
 
 class AdminReasonRequest(BaseModel):
@@ -162,6 +174,13 @@ class AdminReasonRequest(BaseModel):
 class SbpSettingsUpdate(BaseModel):
     phone: str = Field(min_length=5, max_length=40)
     bank: str = Field(min_length=2, max_length=100)
+
+
+class NotificationSettingsUpdate(BaseModel):
+    task_notifications: Optional[bool] = None
+    wallet_notifications: Optional[bool] = None
+    review_notifications: Optional[bool] = None
+    system_notifications: Optional[bool] = None
 
 
 # ==================================================
@@ -542,7 +561,10 @@ async def get_current_sbp(conn):
     )
 
     if row:
-        return {"phone": row["phone"], "bank": row["bank"]}
+        return {
+            "phone": row["phone"],
+            "bank": row["bank"],
+        }
 
     return {
         "phone": DEFAULT_SBP_PHONE,
@@ -579,9 +601,13 @@ async def create_topup(
     amount = rubles_to_kopecks(data.amount)
 
     if amount < MIN_TOPUP_KOPECKS:
-        raise HTTPException(400, "Минимальное пополнение — 10 рублей")
+        raise HTTPException(
+            400,
+            "Минимальное пополнение — 10 рублей",
+        )
 
     sender_name = data.sender_name.strip()
+
     if len(sender_name) < 2:
         raise HTTPException(400, "Укажи имя отправителя")
 
@@ -635,14 +661,22 @@ async def create_withdrawal(
     amount = rubles_to_kopecks(data.amount)
 
     if amount < MIN_WITHDRAWAL_KOPECKS:
-        raise HTTPException(400, "Минимальный вывод — 15 рублей")
+        raise HTTPException(
+            400,
+            "Минимальный вывод — 15 рублей",
+        )
 
-    result = await create_withdrawal_request(
-        request.app.state.db_pool,
-        telegram_id,
-        amount,
-        data.payout_details.strip(),
-    )
+    payout_details = data.payout_details.strip()
+
+    try:
+        result = await create_withdrawal_request(
+            request.app.state.db_pool,
+            telegram_id,
+            amount,
+            payout_details,
+        )
+    except ValueError as error:
+        raise HTTPException(400, str(error))
 
     return {
         "success": True,
@@ -667,7 +701,9 @@ async def get_my_wallet_requests(request: Request):
     async with pool.acquire() as conn:
         topups = await conn.fetch(
             """
-            SELECT id, amount_kopecks, status, admin_comment, created_at, reviewed_at
+            SELECT
+                id, amount_kopecks, status,
+                admin_comment, created_at, reviewed_at
             FROM topup_requests
             WHERE telegram_id = $1
             ORDER BY created_at DESC
@@ -678,8 +714,9 @@ async def get_my_wallet_requests(request: Request):
 
         withdrawals = await conn.fetch(
             """
-            SELECT id, amount_kopecks, fee_kopecks, payout_kopecks,
-                   status, admin_comment, created_at, reviewed_at
+            SELECT
+                id, amount_kopecks, fee_kopecks, payout_kopecks,
+                status, admin_comment, created_at, reviewed_at
             FROM withdrawal_requests
             WHERE telegram_id = $1
             ORDER BY created_at DESC
@@ -766,7 +803,10 @@ async def admin_get_topups(request: Request):
 # ==================================================
 
 @router.post("/admin/topups/{request_id}/approve")
-async def admin_approve_topup(request_id: int, request: Request):
+async def admin_approve_topup(
+    request_id: int,
+    request: Request,
+):
     admin = await require_admin(request)
     admin_id = int(admin["id"])
 
@@ -781,11 +821,17 @@ async def admin_approve_topup(request_id: int, request: Request):
 
     async with request.app.state.db_pool.acquire() as conn:
         await log_admin_action(
-            conn, admin_id, "approve_topup",
-            "topup_request", request_id,
+            conn,
+            admin_id,
+            "approve_topup",
+            "topup_request",
+            request_id,
         )
 
-    return {"success": True, "status": "approved"}
+    return {
+        "success": True,
+        "status": "approved",
+    }
 
 
 # ==================================================
@@ -814,11 +860,18 @@ async def admin_reject_topup(
 
     async with request.app.state.db_pool.acquire() as conn:
         await log_admin_action(
-            conn, admin_id, "reject_topup",
-            "topup_request", request_id, reason,
+            conn,
+            admin_id,
+            "reject_topup",
+            "topup_request",
+            request_id,
+            reason,
         )
 
-    return {"success": True, "status": "rejected"}
+    return {
+        "success": True,
+        "status": "rejected",
+    }
 
 
 # ==================================================
@@ -887,8 +940,11 @@ async def admin_mark_withdrawal_paid(
 
     async with request.app.state.db_pool.acquire() as conn:
         await log_admin_action(
-            conn, admin_id, "mark_withdrawal_paid",
-            "withdrawal_request", request_id,
+            conn,
+            admin_id,
+            "mark_withdrawal_paid",
+            "withdrawal_request",
+            request_id,
         )
 
     return {
@@ -924,11 +980,18 @@ async def admin_reject_withdrawal(
 
     async with request.app.state.db_pool.acquire() as conn:
         await log_admin_action(
-            conn, admin_id, "reject_withdrawal",
-            "withdrawal_request", request_id, reason,
+            conn,
+            admin_id,
+            "reject_withdrawal",
+            "withdrawal_request",
+            request_id,
+            reason,
         )
 
-    return {"success": True, "status": "rejected"}
+    return {
+        "success": True,
+        "status": "rejected",
+    }
 
 
 # ==================================================
@@ -979,7 +1042,10 @@ async def admin_update_sbp(
                 "update_sbp_settings",
                 "sbp_settings",
                 None,
-                details={"phone": phone, "bank": bank},
+                details={
+                    "phone": phone,
+                    "bank": bank,
+                },
             )
 
     return {
@@ -993,13 +1059,6 @@ async def admin_update_sbp(
 # НАСТРОЙКИ УВЕДОМЛЕНИЙ
 # ==================================================
 
-class NotificationSettingsUpdate(BaseModel):
-    task_notifications: Optional[bool] = None
-    wallet_notifications: Optional[bool] = None
-    review_notifications: Optional[bool] = None
-    system_notifications: Optional[bool] = None
-
-
 @router.get("/notifications")
 async def get_notifications(request: Request):
     user = await get_user(request)
@@ -1009,8 +1068,11 @@ async def get_notifications(request: Request):
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT task_notifications, wallet_notifications,
-                   review_notifications, system_notifications
+            SELECT
+                task_notifications,
+                wallet_notifications,
+                review_notifications,
+                system_notifications
             FROM notification_settings
             WHERE telegram_id = $1
             """,
@@ -1059,15 +1121,21 @@ async def update_notifications(
 
             row = await conn.fetchrow(
                 """
-                SELECT task_notifications, wallet_notifications,
-                       review_notifications, system_notifications
+                SELECT
+                    task_notifications,
+                    wallet_notifications,
+                    review_notifications,
+                    system_notifications
                 FROM notification_settings
                 WHERE telegram_id = $1
                 """,
                 telegram_id,
             )
 
-    return {"success": True, "settings": dict(row)}
+    return {
+        "success": True,
+        "settings": dict(row),
+    }
 
 
 # ==================================================
@@ -1099,8 +1167,9 @@ async def get_admin_actions(
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, admin_id, action, target_type,
-                   target_id, reason, details, created_at
+            SELECT
+                id, admin_id, action, target_type,
+                target_id, reason, details, created_at
             FROM admin_actions
             ORDER BY created_at DESC
             LIMIT $1
