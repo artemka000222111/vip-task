@@ -213,7 +213,7 @@ label {font-size:13px;color:var(--muted)}
 
   <div class="hero">
     <h2>Зарабатывай онлайн</h2>
-    <p>Выполняй задания, проходи опросы и получай вознаграждение.</p>
+    <p>Выполняй задания в соцсетях, Яндекс Браузере и Яндекс Картах — получай вознаграждение.</p>
     <button class="btn" onclick="showPage('tasks')">Найти задания</button>
   </div>
 
@@ -254,9 +254,9 @@ label {font-size:13px;color:var(--muted)}
   <form id="createForm">
     <label>Тип задания</label>
     <select id="taskAction" required>
-      <option value="survey">Опрос</option>
-      <option value="content_feedback">Честный отзыв о контенте</option>
-      <option value="usability_test">Тестирование сайта или приложения</option>
+      <option value="social_network">Социальные сети</option>
+      <option value="yandex_browser">Яндекс Браузер</option>
+      <option value="yandex_maps">Яндекс Карты</option>
     </select>
 
     <label>Платформа</label>
@@ -266,13 +266,11 @@ label {font-size:13px;color:var(--muted)}
       <option value="YouTube">YouTube</option>
       <option value="Telegram">Telegram</option>
       <option value="VK">VK</option>
-      <option value="Yandex">Яндекс</option>
-      <option value="Website">Другой сайт</option>
     </select>
 
     <label>Название</label>
     <input id="taskTitle" maxlength="100" minlength="3"
-      placeholder="Например: пройти опрос" required>
+      placeholder="Например: выполнить задание в социальной сети" required>
 
     <label>Описание задания</label>
     <textarea id="taskDescription" rows="4" maxlength="2000"
@@ -783,8 +781,27 @@ async function loadTaskPrices() {
   updateTaskPricePreview();
 }
 
-document.getElementById("taskAction").addEventListener("change", updateTaskPricePreview);
+const taskPlatformsByAction = {
+  social_network: [["TikTok", "TikTok"], ["Instagram", "Instagram"], ["YouTube", "YouTube"], ["Telegram", "Telegram"], ["VK", "VK"]],
+  yandex_browser: [["Yandex Browser", "Яндекс Браузер"]],
+  yandex_maps: [["Yandex Maps", "Яндекс Карты"]]
+};
+
+function updateTaskPlatforms() {
+  const action = document.getElementById("taskAction").value;
+  const select = document.getElementById("taskPlatform");
+  const options = taskPlatformsByAction[action] || [];
+  select.innerHTML = options.map(([value, label]) =>
+    "<option value=\"" + escapeHTML(value) + "\">" + escapeHTML(label) + "</option>"
+  ).join("");
+}
+
+document.getElementById("taskAction").addEventListener("change", () => {
+  updateTaskPlatforms();
+  updateTaskPricePreview();
+});
 document.getElementById("taskQuantity").addEventListener("input", updateTaskPricePreview);
+updateTaskPlatforms();
 
 document.getElementById("createForm").addEventListener("submit", async event => {
   event.preventDefault();
@@ -822,6 +839,8 @@ document.getElementById("createForm").addEventListener("submit", async event => 
       `Заказ №${data.task_id} создан. Сумма резерва: ${money(data.total_price)}.`;
 
     document.getElementById("createForm").reset();
+    updateTaskPlatforms();
+    updateTaskPricePreview();
 
     await loadProfile();
     await loadMyTasks();
@@ -1087,17 +1106,17 @@ async function loadWalletRequests() {
 
 function platformText(platform) {
   const labels = {
-    Website:"Другой сайт",
-    Yandex:"Яндекс"
+    "Yandex Browser":"Яндекс Браузер",
+    "Yandex Maps":"Яндекс Карты"
   };
   return labels[platform] || platform || "—";
 }
 
 function taskActionText(action) {
   const labels = {
-    survey:"Опрос",
-    content_feedback:"Честный отзыв о контенте",
-    usability_test:"Тестирование сайта или приложения"
+    social_network:"Социальные сети",
+    yandex_browser:"Яндекс Браузер",
+    yandex_maps:"Яндекс Карты"
   };
   return labels[action] || action || "Задание";
 }
