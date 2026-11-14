@@ -337,9 +337,8 @@ label {font-size:13px;color:var(--muted)}
       <input id="topupSender" maxlength="100"
         placeholder="Как указано в переводе" required>
 
-      <label>Telegram file_id подтверждения (необязательно)</label>
-      <input id="topupProof" maxlength="500"
-        placeholder="Можно оставить пустым">
+      <label>Скриншот перевода (необязательно)</label>
+      <input id="topupProof" type="file" accept="image/jpeg,image/png,image/webp">
 
       <button class="btn" id="topupButton" type="submit">Отправить заявку</button>
     </form>
@@ -537,6 +536,28 @@ function notify(message) {
   else alert(message);
 }
 
+async function uploadImage(file) {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch("/api/media/upload", {
+    method:"POST",
+    headers:{"X-Telegram-Init-Data":initData},
+    body:form
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.detail || "Не удалось загрузить изображение.");
+  return data;
+}
+
+function chooseImage() {
+  return new Promise(resolve => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/jpeg,image/png,image/webp";
+    input.onchange = () => resolve(input.files && input.files[0] ? input.files[0] : null);
+    input.click();
+  });
+}
 async function api(path, options = {}) {
   if (!initData) throw new Error("Открой VIP TASK через Telegram.");
 
@@ -793,7 +814,7 @@ document.getElementById("topupForm").addEventListener("submit", async event => {
 
   const amount = Number(document.getElementById("topupAmount").value);
   const sender = document.getElementById("topupSender").value.trim();
-  const proof = document.getElementById("topupProof").value.trim();
+  const proofFile = document.getElementById("topupProof").files[0];
 
   if (!Number.isFinite(amount) || amount < 10 || !sender) {
     message.className = "small error";
@@ -805,10 +826,11 @@ document.getElementById("topupForm").addEventListener("submit", async event => {
   button.textContent = "Отправляем...";
 
   try {
+    const uploaded = proofFile ? await uploadImage(proofFile) : null;
     const payload = {
       amount,
       sender_name:sender,
-      proof_file_id:proof || null
+      proof_file_id:uploaded ? uploaded.file_id : null
     };
 
     const data = await api("/api/wallet/topups", {
@@ -1049,17 +1071,16 @@ async function submitWork(taskId, slotId) {
   const proofUrl = prompt("Вставь ссылку на результат выполнения:");
   if (!proofUrl) return;
 
-  const screenshotId = prompt(
-    "Введи Telegram file_id скриншота. Загрузку скриншотов через интерфейс подключим отдельно."
-  );
-  if (!screenshotId) return;
+  const screenshotFile = await chooseImage();
+  if (!screenshotFile) return;
 
   try {
+    const uploaded = await uploadImage(screenshotFile);
     await api(`/api/orders/${taskId}/slots/${slotId}/submit`, {
       method:"POST",
       body:JSON.stringify({
         proof_url:proofUrl.trim(),
-        screenshot_file_id:screenshotId.trim()
+        screenshot_file_id:uploaded.file_id
       })
     });
 
