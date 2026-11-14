@@ -663,7 +663,7 @@ function taskCard(task, tab = "free") {
       : "";
     return `
       <div class="task">
-        <div class="tag">${escapeHTML(task.platform)} · ${escapeHTML(task.action)}</div>
+        <div class="tag">${escapeHTML(task.platform)} · ${escapeHTML(taskActionText(task.action))}</div>
         <div class="task-top">
           <h3>${escapeHTML(task.title)}</h3>
           <div class="reward">${money(task.price)}</div>
@@ -1085,6 +1085,15 @@ async function loadWalletRequests() {
   }
 }
 
+function taskActionText(action) {
+  const labels = {
+    survey:"Опрос",
+    content_feedback:"Честный отзыв о контенте",
+    usability_test:"Тестирование сайта или приложения"
+  };
+  return labels[action] || action || "Задание";
+}
+
 function orderStatusText(status) {
   const labels = {
     active:"Активен",
@@ -1172,7 +1181,7 @@ async function loadMyWork(tab = "active", button) {
           <h3>${escapeHTML(item.title)}</h3>
           <div class="reward">${money(item.price)}</div>
         </div>
-        <div class="tag">${escapeHTML(item.platform)} · ${escapeHTML(item.action)}</div>
+        <div class="tag">${escapeHTML(item.platform)} · ${escapeHTML(taskActionText(item.action))}</div>
         <p><a href="${escapeHTML(item.target_url)}" target="_blank" rel="noopener noreferrer">Перейти к заданию ↗</a></p>
         <div class="row"><span>Статус</span><b>${escapeHTML(workStatusText(item.status))}</b></div>
         <div class="row">
