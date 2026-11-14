@@ -3,8 +3,10 @@ from decimal import Decimal, InvalidOperation
 from typing import Optional
 import os
 import json
+from io import BytesIO
 
 from fastapi import APIRouter, Request, HTTPException, Query, UploadFile, File
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from aiogram.types import BufferedInputFile
 
@@ -259,6 +261,35 @@ async def upload_media(request: Request, file: UploadFile = File(...)):
         )
 
     return {"success": True, "file_id": uploaded_file_id}
+
+
+@router.get("/admin/media")
+async def get_admin_media(request: Request, file_id: str = Query(min_length=5, max_length=500)):
+    await require_admin(request)
+    bot = getattr(request.app.state, "bot", None)
+    if bot is None:
+        raise HTTPException(503, "Telegram-бот временно недоступен")
+
+    try:
+        telegram_file = await bot.get_file(file_id)
+        if not telegram_file.file_path:
+            raise HTTPException(404, "Изображение не найдено")
+        buffer = BytesIO()
+        await bot.download_file(telegram_file.file_path, destination=buffer)
+        content = buffer.getvalue()
+        if not content or len(content) > 10 * 1024 * 1024:
+            raise HTTPException(413, "Размер изображения превышает допустимый")
+        suffix = telegram_file.file_path.lower()
+        media_type = "image/png" if suffix.endswith(".png") else "image/jpeg"
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={"Cache-Control": "private, no-store"},
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(404, "Не удалось получить изображение из Telegram")
 
 
 # ==================================================
