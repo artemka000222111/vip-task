@@ -7,6 +7,16 @@ MIN_WITHDRAWAL_KOPECKS = 1500
 WITHDRAWAL_FEE_PERCENT = 10
 
 
+def calculate_withdrawal(amount_kopecks: int) -> tuple[int, int]:
+    if amount_kopecks < MIN_WITHDRAWAL_KOPECKS:
+        raise ValueError("Минимальный вывод — 15 рублей")
+    fee = amount_kopecks * WITHDRAWAL_FEE_PERCENT // 100
+    payout = amount_kopecks - fee
+    if payout <= 0:
+        raise ValueError("Сумма выплаты некорректна")
+    return fee, payout
+
+
 async def _operation_exists(conn, key: str) -> bool:
     return await conn.fetchval(
         "SELECT EXISTS(SELECT 1 FROM ledger WHERE idempotency_key = $1)",
@@ -380,20 +390,13 @@ async def create_withdrawal_request(
     amount: int,
     payout_details: str,
 ):
-    if amount < MIN_WITHDRAWAL_KOPECKS:
-        raise ValueError("Минимальный вывод — 15 рублей")
+    fee, payout = calculate_withdrawal(amount)
 
     if not payout_details or len(payout_details.strip()) < 5:
         raise ValueError("Укажи корректные платёжные реквизиты")
 
     if len(payout_details) > 1000:
         raise ValueError("Слишком длинные реквизиты")
-
-    fee = amount * WITHDRAWAL_FEE_PERCENT // 100
-    payout = amount - fee
-
-    if payout <= 0:
-        raise ValueError("Сумма выплаты некорректна")
 
     async with pool.acquire() as conn:
         async with conn.transaction():
