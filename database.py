@@ -15,6 +15,19 @@ SCHEMA = [
     """,
 
     """
+    CREATE TABLE IF NOT EXISTS uploaded_media (
+        file_id TEXT PRIMARY KEY,
+        telegram_id BIGINT NOT NULL REFERENCES users(telegram_id),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    """,
+
+    """
+    CREATE INDEX IF NOT EXISTS idx_uploaded_media_owner
+    ON uploaded_media(telegram_id, created_at DESC)
+    """,
+
+    """
     CREATE TABLE IF NOT EXISTS wallets (
         telegram_id BIGINT PRIMARY KEY REFERENCES users(telegram_id),
         available_kopecks BIGINT NOT NULL DEFAULT 0
@@ -34,6 +47,17 @@ SCHEMA = [
         idempotency_key TEXT NOT NULL UNIQUE,
         description TEXT NOT NULL DEFAULT '',
         related_task_id BIGINT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    """,
+
+    """
+    CREATE TABLE IF NOT EXISTS platform_revenue (
+        id BIGSERIAL PRIMARY KEY,
+        idempotency_key TEXT NOT NULL UNIQUE,
+        event_type TEXT NOT NULL,
+        source_id BIGINT,
+        amount_kopecks BIGINT NOT NULL CHECK (amount_kopecks > 0),
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
     """,
@@ -73,6 +97,74 @@ SCHEMA = [
         completed_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+    """,
+
+    """
+    CREATE TABLE IF NOT EXISTS task_slot_assignments (
+        id BIGSERIAL PRIMARY KEY,
+        task_id BIGINT NOT NULL REFERENCES tasks(id),
+        slot_id BIGINT NOT NULL REFERENCES task_slots(id),
+        executor_id BIGINT NOT NULL REFERENCES users(telegram_id),
+        assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        deadline_at TIMESTAMPTZ,
+        ended_at TIMESTAMPTZ,
+        outcome TEXT,
+        reason TEXT
+    )
+    """,
+
+    """
+    ALTER TABLE task_slot_assignments
+    ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMPTZ
+    """,
+
+    """
+    ALTER TABLE task_slots ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ
+    """,
+
+    """
+    CREATE INDEX IF NOT EXISTS idx_slot_assignments_executor
+    ON task_slot_assignments(executor_id, assigned_at DESC)
+    """,
+
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_slot_assignments_one_active_per_slot
+    ON task_slot_assignments(slot_id)
+    WHERE ended_at IS NULL
+    """,
+    """
+    INSERT INTO task_slot_assignments (
+        task_id, slot_id, executor_id, assigned_at,
+        deadline_at, ended_at, outcome
+    )
+    SELECT
+        s.task_id,
+        s.id,
+        s.executor_id,
+        COALESCE(s.taken_at, s.created_at),
+        s.deadline_at,
+        CASE
+            WHEN s.status = 'approved'
+            THEN COALESCE(s.completed_at, s.created_at, NOW())
+            ELSE NULL
+        END,
+        CASE WHEN s.status = 'approved' THEN 'approved' ELSE NULL END
+    FROM task_slots s
+    WHERE s.executor_id IS NOT NULL
+      AND s.status IN ('taken', 'revision', 'pending_review', 'approved')
+      AND NOT EXISTS (
+          SELECT 1
+          FROM task_slot_assignments a
+          WHERE a.slot_id = s.id
+            AND a.executor_id = s.executor_id
+            AND (
+                (s.status = 'approved' AND a.outcome = 'approved')
+                OR (
+                    s.status IN ('taken', 'revision', 'pending_review')
+                    AND a.ended_at IS NULL
+                )
+            )
+      )
     """,
 
     """
@@ -181,6 +273,11 @@ SCHEMA = [
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS initial_total_kopecks BIGINT NOT NULL DEFAULT 0",
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS penalty_kopecks BIGINT NOT NULL DEFAULT 0",
+    """
+    UPDATE tasks
+    SET initial_total_kopecks = unit_price_kopecks * total_slots
+    WHERE initial_total_kopecks = 0
+    """,
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     "ALTER TABLE task_slots ADD COLUMN IF NOT EXISTS slot_number INTEGER",
     "ALTER TABLE task_slots ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ",

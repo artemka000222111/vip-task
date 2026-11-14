@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel, Field
 
 from api import get_user
-from finance import reserve_funds_tx, payout_tx
+from finance import reserve_funds_tx, payout_tx, release_funds_tx
 from notifications import notify_admins, notify_user
 
 
@@ -18,9 +18,15 @@ router = APIRouter(prefix="/api/orders", tags=["orders"])
 # ==========================================
 
 ACTION_PRICE_ENV = {
-    "survey": "TASK_PRICE_SURVEY_KOPECKS",
-    "content_feedback": "TASK_PRICE_FEEDBACK_KOPECKS",
-    "usability_test": "TASK_PRICE_USABILITY_KOPECKS",
+    "social_network": "TASK_PRICE_SOCIAL_NETWORK_KOPECKS",
+    "yandex_browser": "TASK_PRICE_YANDEX_BROWSER_KOPECKS",
+    "yandex_maps": "TASK_PRICE_YANDEX_MAPS_KOPECKS",
+}
+
+ALLOWED_PLATFORMS_BY_ACTION = {
+    "social_network": {"TikTok", "Instagram", "YouTube", "Telegram", "VK"},
+    "yandex_browser": {"Yandex Browser"},
+    "yandex_maps": {"Yandex Maps"},
 }
 
 WORK_HOURS = 1
@@ -133,7 +139,8 @@ async def expire_overdue_slots(conn):
         SELECT
             s.id,
             s.task_id,
-            s.executor_id
+            s.executor_id,
+            t.title
         FROM task_slots s
         JOIN tasks t ON t.id = s.task_id
         WHERE s.status IN ('taken', 'revision')
@@ -144,31 +151,45 @@ async def expire_overdue_slots(conn):
         """
     )
 
-    for slot in expired:
-        if slot["executor_id"] is None:
-            continue
+    notifications = []
 
-        await conn.execute(
-            """
-            INSERT INTO task_bans (
-                task_id,
+    for slot in expired:
+        executor_id = slot["executor_id"]
+        if executor_id is not None:
+            notifications.append({
+                "executor_id": executor_id,
+                "task_id": slot["task_id"],
+                "title": slot["title"],
+            })
+
+            await conn.execute(
+                """
+                INSERT INTO task_bans (
+                    task_id, executor_id, reason
+                )
+                VALUES ($1, $2, $3)
+                ON CONFLICT (task_id, executor_id) DO NOTHING
+                """,
+                slot["task_id"],
                 executor_id,
-                reason
+                "Истекло время выполнения или доработки",
             )
-            VALUES ($1, $2, $3)
-            ON CONFLICT (task_id, executor_id)
-            DO NOTHING
-            """,
-            slot["task_id"],
-            slot["executor_id"],
-            "Истекло время выполнения или доработки",
-        )
+
+            await conn.execute(
+                """
+                UPDATE task_slot_assignments
+                SET ended_at = NOW(), outcome = 'expired',
+                    reason = 'Истекло время выполнения или доработки'
+                WHERE slot_id = $1 AND executor_id = $2 AND ended_at IS NULL
+                """,
+                slot["id"],
+                executor_id,
+            )
 
         await conn.execute(
             """
             UPDATE submissions
-            SET status = 'expired',
-                updated_at = NOW()
+            SET status = 'expired', updated_at = NOW()
             WHERE slot_id = $1
               AND status IN ('pending', 'revision_requested')
             """,
@@ -187,7 +208,19 @@ async def expire_overdue_slots(conn):
             slot["id"],
         )
 
-    return len(expired)
+    return notifications
+
+
+async def notify_expired_executors(app, expired_slots):
+    for item in expired_slots:
+        await notify_user(
+            app,
+            item["executor_id"],
+            "task",
+            "⌛ Время выполнения задания истекло.\n\n"
+            f"Заказ №{item['task_id']}: {item['title']}\n"
+            "Место освобождено, повторно взять этот заказ ты не сможешь.",
+        )
 
 
 # ==========================================
@@ -216,6 +249,20 @@ class ReviewReasonRequest(BaseModel):
 # СОЗДАНИЕ ЗАКАЗА
 # ==========================================
 
+@router.get("/prices")
+async def get_task_prices(request: Request):
+    await get_user(request)
+    prices = {}
+
+    for action in ACTION_PRICE_ENV:
+        try:
+            prices[action] = get_action_price(action) / 100
+        except HTTPException:
+            prices[action] = None
+
+    return {"prices": prices}
+
+
 @router.post("/create")
 async def create_task(data: CreateTaskRequest, request: Request):
     user = await get_user(request)
@@ -223,15 +270,27 @@ async def create_task(data: CreateTaskRequest, request: Request):
 
     pool = request.app.state.db_pool
 
+    platform = data.platform.strip()
+    title = data.title.strip()
+    description = data.description.strip()
+    allowed_platforms = ALLOWED_PLATFORMS_BY_ACTION.get(data.action)
+    if not allowed_platforms:
+        raise HTTPException(400, "Неизвестное направление задания")
+    if platform not in allowed_platforms:
+        raise HTTPException(400, "Площадка не соответствует выбранному направлению")
+    if len(title) < 3:
+        raise HTTPException(400, "Название должно содержать минимум 3 символа")
+    if len(description) < 5:
+        raise HTTPException(400, "Описание должно содержать минимум 5 символов")
+
     unit_price = get_action_price(data.action)
-    target_url = validate_url(data.target_url)
+    target_url = validate_url(data.target_url.strip())
 
     total_amount = unit_price * data.quantity
 
     async with pool.acquire() as conn:
         async with conn.transaction():
 
-            await expire_overdue_slots(conn)
 
             account = await conn.fetchrow(
                 """
@@ -270,10 +329,10 @@ async def create_task(data: CreateTaskRequest, request: Request):
                 RETURNING id
                 """,
                 customer_id,
-                data.platform,
+                platform,
                 data.action,
-                data.title,
-                data.description,
+                title,
+                description,
                 target_url,
                 unit_price,
                 data.quantity,
@@ -332,7 +391,6 @@ async def take_task(task_id: int, request: Request):
     async with pool.acquire() as conn:
         async with conn.transaction():
 
-            await expire_overdue_slots(conn)
 
             account = await conn.fetchrow(
                 """
@@ -449,6 +507,19 @@ async def take_task(task_id: int, request: Request):
                 slot["id"],
             )
 
+            await conn.execute(
+                """
+                INSERT INTO task_slot_assignments (
+                    task_id, slot_id, executor_id, deadline_at
+                )
+                VALUES ($1, $2, $3, $4)
+                """,
+                task_id,
+                slot["id"],
+                executor_id,
+                deadline,
+            )
+
     return {
         "success": True,
         "task_id": task_id,
@@ -480,7 +551,21 @@ async def submit_task(
     async with pool.acquire() as conn:
         async with conn.transaction():
 
-            await expire_overdue_slots(conn)
+            media_owner = await conn.fetchval(
+                "SELECT telegram_id FROM uploaded_media WHERE file_id = $1",
+                screenshot_id,
+            )
+            if media_owner != executor_id:
+                raise HTTPException(400, "Этот скриншот не загружен с твоего аккаунта")
+
+            task_guard = await conn.fetchrow(
+                "SELECT id, status FROM tasks WHERE id = $1 FOR UPDATE",
+                task_id,
+            )
+            if not task_guard:
+                raise HTTPException(404, "Заказ не найден")
+            if task_guard["status"] != "active":
+                raise HTTPException(409, "Заказ не активен")
 
             slot = await conn.fetchrow(
                 """
@@ -490,6 +575,7 @@ async def submit_task(
                     s.executor_id,
                     s.status,
                     s.deadline_at,
+                    (s.deadline_at > NOW()) AS deadline_valid,
                     t.status AS task_status,
                     t.title,
                     t.customer_id
@@ -527,6 +613,12 @@ async def submit_task(
                     "Срок выполнения истёк",
                 )
 
+            if not slot["deadline_valid"]:
+                raise HTTPException(
+                    409,
+                    "Время выполнения уже истекло. Дождись освобождения места.",
+                )
+
             revision = slot["status"] == "revision"
 
             if revision:
@@ -556,6 +648,10 @@ async def submit_task(
                     SET proof_url = $1,
                         screenshot_file_id = $2,
                         status = 'pending',
+                        revision_deadline = NULL,
+                        reviewed_by = NULL,
+                        reviewed_at = NULL,
+                        created_at = NOW(),
                         updated_at = NOW()
                     WHERE slot_id = $3
                     """,
@@ -565,22 +661,39 @@ async def submit_task(
                 )
 
             else:
-                await conn.execute(
+                submission_id = await conn.fetchval(
                     """
                     INSERT INTO submissions (
-                        slot_id,
-                        executor_id,
-                        proof_url,
-                        screenshot_file_id,
-                        status
+                        slot_id, executor_id, proof_url,
+                        screenshot_file_id, status, revision_count,
+                        revision_deadline, admin_reason, reviewed_by,
+                        reviewed_at, created_at, updated_at
                     )
-                    VALUES ($1, $2, $3, $4, 'pending')
+                    VALUES ($1, $2, $3, $4, 'pending', 0, NULL, NULL, NULL, NULL, NOW(), NOW())
+                    ON CONFLICT (slot_id)
+                    DO UPDATE SET
+                        executor_id = EXCLUDED.executor_id,
+                        proof_url = EXCLUDED.proof_url,
+                        screenshot_file_id = EXCLUDED.screenshot_file_id,
+                        status = 'pending',
+                        revision_count = CASE
+                            WHEN submissions.status = 'revision_requested'
+                            THEN submissions.revision_count
+                            ELSE 0
+                        END,
+                        revision_deadline = NULL,
+                        admin_reason = NULL,
+                        reviewed_by = NULL,
+                        reviewed_at = NULL,
+                        created_at = NOW(),
+                        updated_at = NOW()
+                    WHERE submissions.status IN ('expired', 'rejected', 'removed', 'revision_requested')
+                    RETURNING id
                     """,
-                    slot_id,
-                    executor_id,
-                    proof_url,
-                    screenshot_id,
+                    slot_id, executor_id, proof_url, screenshot_id,
                 )
+                if submission_id is None:
+                    raise HTTPException(409, "Для этого места уже существует активная отправка")
 
             await conn.execute(
                 """
@@ -590,6 +703,18 @@ async def submit_task(
                 WHERE id = $1
                 """,
                 slot_id,
+            )
+
+            await conn.execute(
+                """
+                UPDATE task_slot_assignments
+                SET deadline_at = NULL
+                WHERE slot_id = $1
+                  AND executor_id = $2
+                  AND ended_at IS NULL
+                """,
+                slot_id,
+                executor_id,
             )
 
             task_title = slot["title"]
@@ -621,9 +746,6 @@ async def get_admin_reviews(request: Request):
     pool = request.app.state.db_pool
 
     async with pool.acquire() as conn:
-        async with conn.transaction():
-            await expire_overdue_slots(conn)
-
         rows = await conn.fetch(
             """
             SELECT
@@ -687,6 +809,15 @@ async def approve_task(
 
     async with pool.acquire() as conn:
         async with conn.transaction():
+
+            task_guard = await conn.fetchrow(
+                "SELECT id, status FROM tasks WHERE id = $1 FOR UPDATE",
+                task_id,
+            )
+            if not task_guard:
+                raise HTTPException(404, "Заказ не найден")
+            if task_guard["status"] != "active":
+                raise HTTPException(409, "Заказ не активен")
 
             slot = await conn.fetchrow(
                 """
@@ -774,6 +905,29 @@ async def approve_task(
 
             await conn.execute(
                 """
+                UPDATE task_slot_assignments
+                SET ended_at = NOW(), outcome = 'approved'
+                WHERE slot_id = $1 AND executor_id = $2 AND ended_at IS NULL
+                """,
+                slot_id,
+                slot["executor_id"],
+            )
+
+            await conn.execute(
+                """
+                UPDATE tasks
+                SET status = 'completed', updated_at = NOW()
+                WHERE id = $1 AND status = 'active'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM task_slots
+                      WHERE task_id = $1 AND status <> 'approved'
+                  )
+                """,
+                task_id,
+            )
+
+            await conn.execute(
+                """
                 UPDATE tasks
                 SET reserved_kopecks = GREATEST(
                     reserved_kopecks - $1,
@@ -802,10 +956,15 @@ async def approve_task(
     await notify_user(
         request.app,
         executor_id,
+        "review",
+        "✅ Твоё выполнение одобрено!\n\n"
+        f"Заказ №{task_id}: {task_title}",
+    )
+    await notify_user(
+        request.app,
+        executor_id,
         "wallet",
-        "✅ Твоё задание одобрено!\n\n"
-        f"Заказ №{task_id}: {task_title}\n"
-        f"Начислено: {paid_amount / 100:.2f} ₽",
+        f"💰 Начислено на баланс: {paid_amount / 100:.2f} ₽",
     )
 
     await notify_user(
@@ -822,6 +981,160 @@ async def approve_task(
         "message": "Задание одобрено. Исполнителю начислена полная сумма.",
         "paid": paid_amount / 100,
     }
+
+
+# ==========================================
+# СНЯТИЕ ЗАКАЗА АДМИНИСТРАТОРОМ
+# ==========================================
+
+@router.post("/{task_id}/delist")
+async def delist_task(task_id: int, data: ReviewReasonRequest, request: Request):
+    admin = await require_admin(request)
+    admin_id = int(admin["id"])
+    pool = request.app.state.db_pool
+    executor_ids = []
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            task = await conn.fetchrow(
+                """
+                SELECT id, customer_id, title, status,
+                       initial_total_kopecks, reserved_kopecks
+                FROM tasks WHERE id = $1 FOR UPDATE
+                """,
+                task_id,
+            )
+            if not task:
+                raise HTTPException(404, "Заказ не найден")
+            if task["status"] != "active":
+                raise HTTPException(409, "Заказ уже не активен")
+
+            approved_count = await conn.fetchval(
+                "SELECT COUNT(*) FROM task_slots WHERE task_id = $1 AND status = 'approved'",
+                task_id,
+            )
+            if approved_count:
+                raise HTTPException(409, "Нельзя снять заказ: уже есть одобренные выполнения")
+
+            original = int(task["initial_total_kopecks"])
+            penalty = original * 10 // 100
+            reserved = int(task["reserved_kopecks"])
+            if reserved < penalty:
+                raise HTTPException(409, "Резерв заказа не покрывает штраф. Нужна ручная проверка.")
+
+            refund = reserved - penalty
+            if penalty:
+                wallet = await conn.fetchrow(
+                    "SELECT reserved_kopecks FROM wallets WHERE telegram_id = $1 FOR UPDATE",
+                    task["customer_id"],
+                )
+                if not wallet or wallet["reserved_kopecks"] < penalty:
+                    raise HTTPException(409, "Недостаточно средств в резерве заказчика")
+                await conn.execute(
+                    """
+                    UPDATE wallets SET reserved_kopecks = reserved_kopecks - $1,
+                        updated_at = NOW() WHERE telegram_id = $2
+                    """,
+                    penalty, task["customer_id"],
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO ledger (
+                        telegram_id, amount_kopecks, operation,
+                        idempotency_key, description, related_task_id
+                    ) VALUES ($1, $2, 'task_delist_penalty', $3, $4, $5)
+                    """,
+                    task["customer_id"], -penalty,
+                    f"task:{task_id}:delist_penalty",
+                    "Штраф 10% за снятие заказа", task_id,
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO platform_revenue (
+                        idempotency_key, event_type, source_id, amount_kopecks
+                    ) VALUES ($1, 'task_delist_penalty', $2, $3)
+                    ON CONFLICT (idempotency_key) DO NOTHING
+                    """,
+                    f"task:{task_id}:delist_penalty", task_id, penalty,
+                )
+
+            if refund:
+                await release_funds_tx(
+                    conn, int(task["customer_id"]), refund,
+                    f"task:{task_id}:delist_refund", task_id,
+                )
+
+            rows = await conn.fetch(
+                """
+                SELECT DISTINCT executor_id FROM task_slots
+                WHERE task_id = $1 AND executor_id IS NOT NULL
+                  AND status IN ('taken', 'revision', 'pending_review')
+                """,
+                task_id,
+            )
+            executor_ids = [row["executor_id"] for row in rows]
+
+            await conn.execute(
+                """
+                UPDATE submissions
+                SET status = 'removed', admin_reason = $1,
+                    reviewed_at = NOW(), reviewed_by = $2, updated_at = NOW()
+                WHERE slot_id IN (
+                    SELECT id FROM task_slots WHERE task_id = $3
+                      AND status IN ('taken', 'revision', 'pending_review')
+                ) AND status IN ('pending', 'revision_requested')
+                """,
+                data.reason, admin_id, task_id,
+            )
+            await conn.execute(
+                """
+                UPDATE task_slot_assignments
+                SET ended_at = NOW(), outcome = 'delisted', reason = $1
+                WHERE task_id = $2 AND ended_at IS NULL
+                """,
+                data.reason,
+                task_id,
+            )
+
+            await conn.execute(
+                """
+                UPDATE task_slots SET status = 'cancelled', deadline_at = NULL
+                WHERE task_id = $1 AND status <> 'approved'
+                """,
+                task_id,
+            )
+            await conn.execute(
+                """
+                UPDATE tasks SET status = 'removed', reserved_kopecks = 0,
+                    penalty_kopecks = $1, removal_reason = $2,
+                    removed_at = NOW(), updated_at = NOW()
+                WHERE id = $3
+                """,
+                penalty, data.reason, task_id,
+            )
+            await log_admin_action(
+                conn, admin_id, "delist_task", "task", task_id, data.reason
+            )
+            customer_id = task["customer_id"]
+            title = task["title"]
+
+    await notify_user(
+        request.app, customer_id, "task",
+        "⛔ Твой заказ снят администратором.\n\n"
+        f"Заказ №{task_id}: {title}\n"
+        f"Штраф: {penalty / 100:.2f} ₽\n"
+        f"Возвращено: {refund / 100:.2f} ₽\n"
+        f"Причина: {data.reason}",
+    )
+    for executor_id in executor_ids:
+        await notify_user(
+            request.app, executor_id, "task",
+            "⛔ Заказ, над которым ты работал, снят с публикации.\n\n"
+            f"Заказ №{task_id}: {title}\nДальнейшее выполнение невозможно.",
+        )
+
+    return {"success": True, "status": "removed",
+            "penalty": penalty / 100, "refund": refund / 100}
 
 
 # ==========================================
@@ -842,6 +1155,15 @@ async def request_revision(
 
     async with pool.acquire() as conn:
         async with conn.transaction():
+
+            task_guard = await conn.fetchrow(
+                "SELECT id, status FROM tasks WHERE id = $1 FOR UPDATE",
+                task_id,
+            )
+            if not task_guard:
+                raise HTTPException(404, "Заказ не найден")
+            if task_guard["status"] != "active":
+                raise HTTPException(409, "Заказ не активен")
 
             slot = await conn.fetchrow(
                 """
@@ -925,6 +1247,19 @@ async def request_revision(
                 slot_id,
             )
 
+            await conn.execute(
+                """
+                UPDATE task_slot_assignments
+                SET deadline_at = $1
+                WHERE slot_id = $2
+                  AND executor_id = $3
+                  AND ended_at IS NULL
+                """,
+                deadline,
+                slot_id,
+                slot["executor_id"],
+            )
+
             await log_admin_action(
                 conn,
                 admin_id,
@@ -940,7 +1275,7 @@ async def request_revision(
     await notify_user(
         request.app,
         executor_id,
-        "task",
+        "review",
         "📝 Твоё задание отправлено на доработку.\n\n"
         f"Заказ №{task_id}: {task_title}\n"
         f"Причина: {data.reason}\n\n"
@@ -974,6 +1309,15 @@ async def reject_task(
 
     async with pool.acquire() as conn:
         async with conn.transaction():
+
+            task_guard = await conn.fetchrow(
+                "SELECT id, status FROM tasks WHERE id = $1 FOR UPDATE",
+                task_id,
+            )
+            if not task_guard:
+                raise HTTPException(404, "Заказ не найден")
+            if task_guard["status"] != "active":
+                raise HTTPException(409, "Заказ не активен")
 
             slot = await conn.fetchrow(
                 """
@@ -1055,6 +1399,17 @@ async def reject_task(
 
             await conn.execute(
                 """
+                UPDATE task_slot_assignments
+                SET ended_at = NOW(), outcome = 'rejected', reason = $1
+                WHERE slot_id = $2 AND executor_id = $3 AND ended_at IS NULL
+                """,
+                data.reason,
+                slot_id,
+                executor_id,
+            )
+
+            await conn.execute(
+                """
                 UPDATE task_slots
                 SET status = 'free',
                     executor_id = NULL,
@@ -1078,7 +1433,7 @@ async def reject_task(
         await notify_user(
             request.app,
             executor_id,
-            "task",
+            "review",
             "❌ Твой результат отклонён.\n\n"
             f"Заказ №{task_id}: {task_title}\n"
             f"Причина: {data.reason}\n\n"
@@ -1111,6 +1466,15 @@ async def remove_executor(
 
     async with pool.acquire() as conn:
         async with conn.transaction():
+
+            task_guard = await conn.fetchrow(
+                "SELECT id, status FROM tasks WHERE id = $1 FOR UPDATE",
+                task_id,
+            )
+            if not task_guard:
+                raise HTTPException(404, "Заказ не найден")
+            if task_guard["status"] != "active":
+                raise HTTPException(409, "Заказ не активен")
 
             slot = await conn.fetchrow(
                 """
@@ -1154,22 +1518,6 @@ async def remove_executor(
 
             await conn.execute(
                 """
-                INSERT INTO task_bans (
-                    task_id,
-                    executor_id,
-                    reason
-                )
-                VALUES ($1, $2, $3)
-                ON CONFLICT (task_id, executor_id)
-                DO NOTHING
-                """,
-                task_id,
-                executor_id,
-                data.reason,
-            )
-
-            await conn.execute(
-                """
                 UPDATE submissions
                 SET status = 'removed',
                     admin_reason = $1,
@@ -1182,6 +1530,17 @@ async def remove_executor(
                 data.reason,
                 admin_id,
                 slot_id,
+            )
+
+            await conn.execute(
+                """
+                UPDATE task_slot_assignments
+                SET ended_at = NOW(), outcome = 'removed', reason = $1
+                WHERE slot_id = $2 AND executor_id = $3 AND ended_at IS NULL
+                """,
+                data.reason,
+                slot_id,
+                executor_id,
             )
 
             await conn.execute(
@@ -1212,7 +1571,7 @@ async def remove_executor(
         "⚠️ Администратор снял тебя с задания.\n\n"
         f"Заказ №{task_id}: {task_title}\n"
         f"Причина: {data.reason}\n\n"
-        "Ты больше не сможешь взять этот заказ.",
+        "Место снова свободно. Ты можешь взять этот заказ повторно, если оно ещё доступно.",
     )
 
     return {

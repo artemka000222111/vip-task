@@ -3,9 +3,12 @@ from decimal import Decimal, InvalidOperation
 from typing import Optional
 import os
 import json
+from io import BytesIO
 
-from fastapi import APIRouter, Request, HTTPException, Query
+from fastapi import APIRouter, Request, HTTPException, Query, UploadFile, File
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from aiogram.types import BufferedInputFile
 
 from auth import verify_telegram_init_data
 from finance import (
@@ -212,6 +215,123 @@ class NotificationSettingsUpdate(BaseModel):
 
 
 # ==================================================
+# ЗАГРУЗКА ИЗОБРАЖЕНИЙ С ТЕЛЕФОНА
+# ==================================================
+
+@router.post("/media/upload")
+async def upload_media(request: Request, file: UploadFile = File(...)):
+    user = await get_user(request)
+    telegram_id = int(user["id"])
+
+    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(400, "Можно загрузить только JPG, PNG или WEBP")
+
+    content = await file.read(5 * 1024 * 1024 + 1)
+    if not content:
+        raise HTTPException(400, "Файл пустой")
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(413, "Максимальный размер изображения — 5 МБ")
+
+    valid_signature = (
+        (
+            file.content_type == "image/jpeg"
+            and len(content) >= 3
+            and content[0] == 0xFF
+            and content[1] == 0xD8
+            and content[2] == 0xFF
+        )
+        or (
+            file.content_type == "image/png"
+            and content[:8] == bytes((137, 80, 78, 71, 13, 10, 26, 10))
+        )
+        or (
+            file.content_type == "image/webp"
+            and len(content) >= 12
+            and content[:4] == b"RIFF"
+            and content[8:12] == b"WEBP"
+        )
+    )
+    if not valid_signature:
+        raise HTTPException(400, "Содержимое файла не соответствует формату изображения")
+
+    bot = getattr(request.app.state, "bot", None)
+    if bot is None:
+        raise HTTPException(503, "Загрузка временно недоступна")
+
+    uploaded_file_id = None
+    errors = []
+    for admin_id in sorted(get_admin_ids()):
+        try:
+            message = await bot.send_photo(
+                chat_id=admin_id,
+                photo=BufferedInputFile(
+                    content,
+                    filename=file.filename or "vip-task-image",
+                ),
+                caption=f"📎 Вложение VIP TASK от пользователя {telegram_id}",
+            )
+            uploaded_file_id = message.photo[-1].file_id
+            break
+        except Exception as error:
+            errors.append(str(error))
+
+    if not uploaded_file_id:
+        raise HTTPException(
+            503,
+            "Не удалось передать изображение администратору. Проверь, что бот может писать администратору.",
+        )
+
+    async with request.app.state.db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO uploaded_media (file_id, telegram_id)
+            VALUES ($1, $2)
+            ON CONFLICT (file_id) DO NOTHING
+            """,
+            uploaded_file_id,
+            telegram_id,
+        )
+        stored_owner = await conn.fetchval(
+            "SELECT telegram_id FROM uploaded_media WHERE file_id = $1",
+            uploaded_file_id,
+        )
+        if stored_owner != telegram_id:
+            raise HTTPException(409, "Это изображение уже связано с другим аккаунтом")
+
+    return {"success": True, "file_id": uploaded_file_id}
+
+
+@router.get("/admin/media")
+async def get_admin_media(request: Request, file_id: str = Query(min_length=5, max_length=500)):
+    await require_admin(request)
+    bot = getattr(request.app.state, "bot", None)
+    if bot is None:
+        raise HTTPException(503, "Telegram-бот временно недоступен")
+
+    try:
+        telegram_file = await bot.get_file(file_id)
+        if not telegram_file.file_path:
+            raise HTTPException(404, "Изображение не найдено")
+        buffer = BytesIO()
+        await bot.download_file(telegram_file.file_path, destination=buffer)
+        content = buffer.getvalue()
+        if not content or len(content) > 10 * 1024 * 1024:
+            raise HTTPException(413, "Размер изображения превышает допустимый")
+        suffix = telegram_file.file_path.lower()
+        media_type = "image/png" if suffix.endswith(".png") else "image/jpeg"
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={"Cache-Control": "private, no-store"},
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(404, "Не удалось получить изображение из Telegram")
+
+
+# ==================================================
 # ПРОФИЛЬ И БАЛАНС
 # ==================================================
 
@@ -291,85 +411,122 @@ async def get_tasks(
     user = await get_user(request)
     telegram_id = int(user["id"])
 
-    if tab != "free":
+    if tab not in ("free", "active", "review"):
         raise HTTPException(400, "Неизвестная вкладка")
 
     pool = request.app.state.db_pool
 
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT
-                t.id,
-                t.platform,
-                t.action,
-                t.title,
-                t.description,
-                t.target_url,
-                t.unit_price_kopecks,
-                t.total_slots,
-                t.created_at,
+        if tab == "free":
+            rows = await conn.fetch(
+                """
+                SELECT
+                    t.id,
+                    t.platform,
+                    t.action,
+                    t.title,
+                    t.description,
+                    t.target_url,
+                    t.unit_price_kopecks,
+                    t.total_slots,
+                    t.created_at,
+                    COUNT(s.id) FILTER (WHERE s.status = 'free') AS available_slots,
+                    COUNT(s.id) FILTER (WHERE s.status IN ('taken', 'revision')) AS taken_slots,
+                    COUNT(s.id) FILTER (WHERE s.status = 'pending_review') AS pending_review_slots,
+                    COUNT(s.id) FILTER (WHERE s.status = 'approved') AS approved_slots
+                FROM tasks t
+                LEFT JOIN task_slots s ON s.task_id = t.id
+                WHERE t.status = 'active'
+                  AND t.customer_id != $1
+                  AND NOT EXISTS (
+                      SELECT 1 FROM task_bans b
+                      WHERE b.task_id = t.id AND b.executor_id = $1
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM task_slots own
+                      WHERE own.task_id = t.id
+                        AND own.executor_id = $1
+                        AND own.status IN ('taken', 'revision', 'pending_review')
+                  )
+                GROUP BY t.id
+                HAVING COUNT(s.id) FILTER (WHERE s.status = 'free') > 0
+                ORDER BY t.unit_price_kopecks DESC, t.created_at DESC
+                LIMIT 100
+                """,
+                telegram_id,
+            )
+            result = [
+                {
+                    "id": row["id"],
+                    "platform": row["platform"],
+                    "action": row["action"],
+                    "title": row["title"],
+                    "description": row["description"],
+                    "target_url": row["target_url"],
+                    "price": row["unit_price_kopecks"] / 100,
+                    "total_slots": row["total_slots"],
+                    "available_slots": row["available_slots"],
+                    "taken_slots": row["taken_slots"],
+                    "pending_review_slots": row["pending_review_slots"],
+                    "approved_slots": row["approved_slots"],
+                    "created_at": row["created_at"].isoformat(),
+                    "status": "free",
+                    "slot_id": None,
+                    "deadline_at": None,
+                    "admin_reason": None,
+                }
+                for row in rows
+            ]
+        else:
+            statuses = ["taken", "revision"] if tab == "active" else ["pending_review"]
+            rows = await conn.fetch(
+                """
+                SELECT
+                    t.id,
+                    s.id AS slot_id,
+                    s.status,
+                    s.deadline_at,
+                    s.taken_at,
+                    t.platform,
+                    t.action,
+                    t.title,
+                    t.description,
+                    t.target_url,
+                    t.unit_price_kopecks,
+                    t.total_slots,
+                    sub.admin_reason
+                FROM task_slots s
+                JOIN tasks t ON t.id = s.task_id
+                LEFT JOIN submissions sub
+                  ON sub.slot_id = s.id AND sub.executor_id = s.executor_id
+                WHERE s.executor_id = $1
+                  AND s.status = ANY($2::text[])
+                ORDER BY t.unit_price_kopecks DESC, s.deadline_at ASC NULLS LAST, s.taken_at DESC
+                LIMIT 100
+                """,
+                telegram_id,
+                statuses,
+            )
+            result = [
+                {
+                    "id": row["id"],
+                    "slot_id": row["slot_id"],
+                    "platform": row["platform"],
+                    "action": row["action"],
+                    "title": row["title"],
+                    "description": row["description"],
+                    "target_url": row["target_url"],
+                    "price": row["unit_price_kopecks"] / 100,
+                    "total_slots": row["total_slots"],
+                    "available_slots": None,
+                    "status": row["status"],
+                    "deadline_at": row["deadline_at"].isoformat() if row["deadline_at"] else None,
+                    "admin_reason": row["admin_reason"],
+                }
+                for row in rows
+            ]
 
-                COUNT(s.id) FILTER (
-                    WHERE s.status = 'free'
-                ) AS available_slots,
-
-                COUNT(s.id) FILTER (
-                    WHERE s.status IN ('taken', 'revision')
-                ) AS taken_slots,
-
-                COUNT(s.id) FILTER (
-                    WHERE s.status = 'pending_review'
-                ) AS pending_review_slots,
-
-                COUNT(s.id) FILTER (
-                    WHERE s.status = 'approved'
-                ) AS approved_slots
-
-            FROM tasks t
-            LEFT JOIN task_slots s ON s.task_id = t.id
-
-            WHERE t.status = 'active'
-              AND t.customer_id != $1
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM task_bans b
-                  WHERE b.task_id = t.id
-                    AND b.executor_id = $1
-              )
-
-            GROUP BY t.id
-
-            HAVING COUNT(s.id) FILTER (
-                WHERE s.status = 'free'
-            ) > 0
-
-            ORDER BY t.unit_price_kopecks DESC, t.created_at DESC
-            LIMIT 100
-            """,
-            telegram_id,
-        )
-
-    return {
-        "tasks": [
-            {
-                "id": row["id"],
-                "platform": row["platform"],
-                "action": row["action"],
-                "title": row["title"],
-                "description": row["description"],
-                "target_url": row["target_url"],
-                "price": row["unit_price_kopecks"] / 100,
-                "total_slots": row["total_slots"],
-                "available_slots": row["available_slots"],
-                "taken_slots": row["taken_slots"],
-                "pending_review_slots": row["pending_review_slots"],
-                "approved_slots": row["approved_slots"],
-                "created_at": row["created_at"].isoformat(),
-            }
-            for row in rows
-        ]
-    }
+    return {"tasks": result}
 
 
 # ==================================================
@@ -474,9 +631,13 @@ async def get_my_work(
                 s.id AS slot_id,
                 s.task_id,
                 s.status AS slot_status,
-                s.taken_at,
-                s.deadline_at,
-                s.completed_at,
+                a.outcome AS assignment_outcome,
+                a.reason AS assignment_reason,
+                a.assigned_at,
+                a.deadline_at AS assignment_deadline_at,
+                a.ended_at,
+                CASE WHEN a.outcome = 'approved' THEN s.completed_at ELSE NULL END
+                    AS assignment_completed_at,
                 t.platform,
                 t.action,
                 t.title,
@@ -484,24 +645,25 @@ async def get_my_work(
                 t.target_url,
                 t.unit_price_kopecks,
                 t.status AS task_status,
-                sub.proof_url,
-                sub.screenshot_file_id,
-                sub.status AS submission_status,
-                sub.revision_count,
-                sub.revision_deadline,
                 sub.admin_reason
-            FROM task_slots s
-            JOIN tasks t ON t.id = s.task_id
-            LEFT JOIN submissions sub ON sub.slot_id = s.id
-            WHERE s.executor_id = $1
+            FROM task_slot_assignments a
+            JOIN task_slots s ON s.id = a.slot_id
+            JOIN tasks t ON t.id = a.task_id
+            LEFT JOIN submissions sub
+              ON sub.slot_id = s.id
+             AND sub.executor_id = a.executor_id
+             AND a.ended_at IS NULL
+            WHERE a.executor_id = $1
               AND (
                   $2 = 'all'
-                  OR ($2 = 'active' AND s.status IN (
-                      'taken', 'revision', 'pending_review'
-                  ))
-                  OR ($2 = 'approved' AND s.status = 'approved')
+                  OR (
+                      $2 = 'active'
+                      AND a.ended_at IS NULL
+                      AND s.status IN ('taken', 'revision', 'pending_review')
+                  )
+                  OR ($2 = 'approved' AND a.outcome = 'approved')
               )
-            ORDER BY s.taken_at DESC NULLS LAST
+            ORDER BY a.assigned_at DESC
             LIMIT 100
             """,
             telegram_id,
@@ -513,7 +675,11 @@ async def get_my_work(
             {
                 "slot_id": row["slot_id"],
                 "task_id": row["task_id"],
-                "status": row["slot_status"],
+                "status": (
+                    row["assignment_outcome"]
+                    if row["ended_at"] is not None and row["assignment_outcome"]
+                    else row["slot_status"]
+                ),
                 "platform": row["platform"],
                 "action": row["action"],
                 "title": row["title"],
@@ -521,20 +687,16 @@ async def get_my_work(
                 "target_url": row["target_url"],
                 "price": row["unit_price_kopecks"] / 100,
                 "task_status": row["task_status"],
-                "taken_at": row["taken_at"].isoformat() if row["taken_at"] else None,
-                "deadline_at": row["deadline_at"].isoformat() if row["deadline_at"] else None,
-                "completed_at": row["completed_at"].isoformat() if row["completed_at"] else None,
-                "proof_url": row["proof_url"],
-                "screenshot_file_id": row["screenshot_file_id"],
-                "submission_status": row["submission_status"],
-                "revision_count": row["revision_count"],
-                "revision_deadline": row["revision_deadline"].isoformat() if row["revision_deadline"] else None,
+                "taken_at": row["assigned_at"].isoformat() if row["assigned_at"] else None,
+                "deadline_at": row["assignment_deadline_at"].isoformat() if row["assignment_deadline_at"] else None,
+                "completed_at": row["assignment_completed_at"].isoformat() if row["assignment_completed_at"] else None,
                 "admin_reason": row["admin_reason"],
+                "assignment_reason": row["assignment_reason"],
+                "ended_at": row["ended_at"].isoformat() if row["ended_at"] else None,
             }
             for row in rows
         ]
     }
-
 
 # ==================================================
 # ИСТОРИЯ КОШЕЛЬКА
@@ -635,6 +797,7 @@ async def create_topup(
         )
 
     sender_name = data.sender_name.strip()
+    proof_file_id = data.proof_file_id.strip() if data.proof_file_id else None
 
     if len(sender_name) < 2:
         raise HTTPException(400, "Укажи имя отправителя")
@@ -643,6 +806,14 @@ async def create_topup(
 
     async with pool.acquire() as conn:
         async with conn.transaction():
+            if proof_file_id:
+                media_owner = await conn.fetchval(
+                    "SELECT telegram_id FROM uploaded_media WHERE file_id = $1",
+                    proof_file_id,
+                )
+                if media_owner != telegram_id:
+                    raise HTTPException(400, "Это изображение не загружено с твоего аккаунта")
+
             sbp = await get_current_sbp(conn)
 
             request_id = await conn.fetchval(
@@ -662,7 +833,7 @@ async def create_topup(
                 telegram_id,
                 amount,
                 sender_name,
-                data.proof_file_id.strip() if data.proof_file_id else None,
+                proof_file_id,
                 sbp["phone"],
                 sbp["bank"],
             )
@@ -1280,6 +1451,54 @@ async def get_admin_status(request: Request):
 # ==================================================
 # ЖУРНАЛ ДЕЙСТВИЙ АДМИНИСТРАТОРА
 # ==================================================
+
+@router.get("/admin/assignments")
+async def get_admin_assignments(
+    request: Request,
+    limit: int = Query(default=200, ge=1, le=500),
+):
+    await require_admin(request)
+    pool = request.app.state.db_pool
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT
+                a.id, a.task_id, a.slot_id, a.executor_id,
+                s.status AS slot_status,
+                u.first_name, u.username, t.title,
+                a.assigned_at, a.deadline_at, a.ended_at, a.outcome, a.reason
+            FROM task_slot_assignments a
+            JOIN task_slots s ON s.id = a.slot_id
+            JOIN users u ON u.telegram_id = a.executor_id
+            JOIN tasks t ON t.id = a.task_id
+            ORDER BY (a.ended_at IS NULL) DESC, a.assigned_at DESC
+            LIMIT $1
+            """,
+            limit,
+        )
+
+    return {
+        "assignments": [
+            {
+                "id": row["id"],
+                "task_id": row["task_id"],
+                "slot_id": row["slot_id"],
+                "executor_id": row["executor_id"],
+                "slot_status": row["slot_status"],
+                "first_name": row["first_name"],
+                "username": row["username"],
+                "title": row["title"],
+                "assigned_at": row["assigned_at"].isoformat(),
+                "deadline_at": row["deadline_at"].isoformat() if row["deadline_at"] else None,
+                "ended_at": row["ended_at"].isoformat() if row["ended_at"] else None,
+                "outcome": row["outcome"],
+                "reason": row["reason"],
+            }
+            for row in rows
+        ]
+    }
+
 
 @router.get("/admin/actions")
 async def get_admin_actions(

@@ -37,7 +37,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from database import init_db
 from api import router as api_router
 from tasks import router as tasks_router
-from tasks import expire_overdue_slots
+from tasks import expire_overdue_slots, notify_expired_executors
 
 
 logging.basicConfig(
@@ -199,10 +199,13 @@ async def broadcast_confirm_callback(callback: CallbackQuery):
         async with db_pool.acquire() as conn:
             users = await conn.fetch(
                 """
-                SELECT telegram_id
-                FROM users
-                WHERE is_blocked = FALSE
-                ORDER BY created_at ASC
+                SELECT u.telegram_id
+                FROM users u
+                LEFT JOIN notification_settings n
+                  ON n.telegram_id = u.telegram_id
+                WHERE u.is_blocked = FALSE
+                  AND COALESCE(n.system_notifications, TRUE) = TRUE
+                ORDER BY u.created_at ASC
                 """
             )
 
@@ -251,19 +254,20 @@ async def broadcast_confirm_callback(callback: CallbackQuery):
         )
 
 
-async def expiration_loop(pool):
+async def expiration_loop(pool, app):
     logger.info("Запущена автоматическая проверка сроков заданий")
 
     while True:
         try:
             async with pool.acquire() as conn:
                 async with conn.transaction():
-                    expired_count = await expire_overdue_slots(conn)
+                    expired_slots = await expire_overdue_slots(conn)
 
-            if expired_count:
+            if expired_slots:
+                await notify_expired_executors(app, expired_slots)
                 logger.info(
                     "Автоматически освобождено просроченных мест: %s",
-                    expired_count,
+                    len(expired_slots),
                 )
 
         except asyncio.CancelledError:
@@ -303,16 +307,16 @@ async def lifespan(app: FastAPI):
         logger.info("Инициализация базы данных...")
         await init_db(db_pool)
 
-        expiration_task = asyncio.create_task(
-            expiration_loop(db_pool)
-        )
-
         logger.info("Запуск Telegram-бота...")
 
         bot = Bot(token=token)
         app.state.bot = bot
 
-        await bot.delete_webhook(drop_pending_updates=True)
+        await bot.delete_webhook(drop_pending_updates=False)
+
+        expiration_task = asyncio.create_task(
+            expiration_loop(db_pool, app)
+        )
 
         polling_task = asyncio.create_task(
             dp.start_polling(bot)
@@ -393,6 +397,24 @@ async def health():
             content={
                 "status": "error",
                 "database": "not connected",
+                "telegram_bot": "unknown",
+            },
+        )
+
+    if (
+        bot is None
+        or polling_task is None
+        or polling_task.done()
+        or expiration_task is None
+        or expiration_task.done()
+    ):
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "error",
+                "database": "not checked",
+                "telegram_bot": "not running",
+                "expiration_worker": "not running",
             },
         )
 
@@ -403,6 +425,8 @@ async def health():
         return {
             "status": "ok",
             "database": "connected",
+            "telegram_bot": "running",
+            "expiration_worker": "running",
         }
 
     except Exception:

@@ -213,7 +213,7 @@ label {font-size:13px;color:var(--muted)}
 
   <div class="hero">
     <h2>Зарабатывай онлайн</h2>
-    <p>Выполняй задания, проходи опросы и получай вознаграждение.</p>
+    <p>Выполняй задания в соцсетях, Яндекс Браузере и Яндекс Картах — получай вознаграждение.</p>
     <button class="btn" onclick="showPage('tasks')">Найти задания</button>
   </div>
 
@@ -235,7 +235,9 @@ label {font-size:13px;color:var(--muted)}
   <h1>Задания</h1>
   <div class="subtitle">Выбирай подходящее задание</div>
   <div class="tabs">
-    <button class="active" onclick="loadTasks(this)">Свободные</button>
+    <button class="active" onclick="loadTasks('free',this)">Свободные</button>
+    <button onclick="loadTasks('active',this)">В работе</button>
+    <button onclick="loadTasks('review',this)">На проверке</button>
   </div>
   <div id="allTasks" class="loading">Загружаем...</div>
 </section>
@@ -252,9 +254,9 @@ label {font-size:13px;color:var(--muted)}
   <form id="createForm">
     <label>Тип задания</label>
     <select id="taskAction" required>
-      <option value="survey">Опрос</option>
-      <option value="content_feedback">Честный отзыв о контенте</option>
-      <option value="usability_test">Тестирование сайта или приложения</option>
+      <option value="social_network">Социальные сети</option>
+      <option value="yandex_browser">Яндекс Браузер</option>
+      <option value="yandex_maps">Яндекс Карты</option>
     </select>
 
     <label>Платформа</label>
@@ -264,13 +266,11 @@ label {font-size:13px;color:var(--muted)}
       <option value="YouTube">YouTube</option>
       <option value="Telegram">Telegram</option>
       <option value="VK">VK</option>
-      <option value="Yandex">Яндекс</option>
-      <option value="Website">Другой сайт</option>
     </select>
 
     <label>Название</label>
     <input id="taskTitle" maxlength="100" minlength="3"
-      placeholder="Например: пройти опрос" required>
+      placeholder="Например: выполнить задание в социальной сети" required>
 
     <label>Описание задания</label>
     <textarea id="taskDescription" rows="4" maxlength="2000"
@@ -283,6 +283,7 @@ label {font-size:13px;color:var(--muted)}
     <input id="taskQuantity" type="number" min="1" max="10000"
       value="1" required>
 
+    <div class="notice" id="taskPricePreview">Загружаем стоимость задания...</div>
     <button class="btn" id="createButton" type="submit">Опубликовать заказ</button>
   </form>
   <div id="createMessage" class="small"></div>
@@ -337,9 +338,8 @@ label {font-size:13px;color:var(--muted)}
       <input id="topupSender" maxlength="100"
         placeholder="Как указано в переводе" required>
 
-      <label>Telegram file_id подтверждения (необязательно)</label>
-      <input id="topupProof" maxlength="500"
-        placeholder="Можно оставить пустым">
+      <label>Скриншот перевода (необязательно)</label>
+      <input id="topupProof" type="file" accept="image/jpeg,image/png,image/webp">
 
       <button class="btn" id="topupButton" type="submit">Отправить заявку</button>
     </form>
@@ -432,9 +432,22 @@ label {font-size:13px;color:var(--muted)}
       <div class="success">Администратор</div>
       <p class="small">Доступ подтверждён сервером.</p>
 
+      <div class="section-title">Снятие заказа</div>
+      <label>Номер заказа</label>
+      <input id="delistTaskId" type="number" min="1" placeholder="ID заказа">
+      <label>Причина снятия</label>
+      <input id="delistTaskReason" maxlength="1000" placeholder="Укажи причину">
+      <button class="btn danger" onclick="adminDelistTask()">Снять заказ</button>
+      <div class="line"></div>
       <div class="section-title">Проверка заданий</div>
       <button class="btn secondary" onclick="loadAdminReviews()">Обновить проверки</button>
       <div id="adminReviews"></div>
+    </div>
+
+    <div class="panel">
+      <div class="section-title">История исполнителей</div>
+      <button class="btn secondary" onclick="loadAdminAssignments()">Обновить историю</button>
+      <div id="adminAssignments"></div>
     </div>
 
     <div class="panel">
@@ -530,6 +543,37 @@ function notify(message) {
   else alert(message);
 }
 
+async function loadAdminMedia(fileId) {
+  if (!fileId) return null;
+  const response = await fetch("/api/admin/media?file_id=" + encodeURIComponent(fileId), {
+    headers:{"X-Telegram-Init-Data":initData}
+  });
+  if (!response.ok) return null;
+  return URL.createObjectURL(await response.blob());
+}
+
+async function uploadImage(file) {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch("/api/media/upload", {
+    method:"POST",
+    headers:{"X-Telegram-Init-Data":initData},
+    body:form
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.detail || "Не удалось загрузить изображение.");
+  return data;
+}
+
+function chooseImage() {
+  return new Promise(resolve => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/jpeg,image/png,image/webp";
+    input.onchange = () => resolve(input.files && input.files[0] ? input.files[0] : null);
+    input.click();
+  });
+}
 async function api(path, options = {}) {
   if (!initData) throw new Error("Открой VIP TASK через Telegram.");
 
@@ -568,7 +612,7 @@ function showPage(id, button) {
     if (index >= 0) document.querySelectorAll("nav button")[index].classList.add("active");
   }
 
-  if (id === "tasks") loadTasks();
+  if (id === "tasks") loadTasks("free", document.querySelector("#tasks .tabs button"));
   if (id === "wallet") loadWallet();
   if (id === "profile") loadProfile();
 }
@@ -604,7 +648,34 @@ async function loadProfile() {
   }
 }
 
-function taskCard(task) {
+function taskCard(task, tab = "free") {
+  const labels = {
+    taken:"В работе",
+    revision:"На доработке",
+    pending_review:"На проверке"
+  };
+
+  if (tab !== "free") {
+    const actionButton = tab === "active"
+      ? `<button class="btn" onclick="submitWork(${task.id},${task.slot_id})">${task.status === "revision" ? "Отправить доработку" : "Отправить результат"}</button>`
+      : "";
+    return `
+      <div class="task">
+        <div class="tag">${escapeHTML(platformText(task.platform))} · ${escapeHTML(taskActionText(task.action))}</div>
+        <div class="task-top">
+          <h3>${escapeHTML(task.title)}</h3>
+          <div class="reward">${money(task.price)}</div>
+        </div>
+        <p>${escapeHTML(task.description)}</p>
+        <p><a href="${escapeHTML(task.target_url)}" target="_blank" rel="noopener noreferrer">Перейти к заданию ↗</a></p>
+        <div class="row"><span>Статус</span><b class="status">${escapeHTML(labels[task.status] || task.status)}</b></div>
+        <div class="row"><span>Срок</span><b>${task.deadline_at ? new Date(task.deadline_at).toLocaleString("ru-RU") : "—"}</b></div>
+        ${task.admin_reason ? `<div class="notice">${escapeHTML(task.admin_reason)}</div>` : ""}
+        ${actionButton}
+      </div>
+    `;
+  }
+
   return `
     <div class="task">
       <div class="tag">${escapeHTML(task.platform)} · ${escapeHTML(task.action)}</div>
@@ -613,6 +684,7 @@ function taskCard(task) {
         <div class="reward">+${money(task.price)}</div>
       </div>
       <p>${escapeHTML(task.description)}</p>
+      <p><a href="${escapeHTML(task.target_url)}" target="_blank" rel="noopener noreferrer">Открыть задание ↗</a></p>
       <div class="row"><span>Свободно мест</span><b>${task.available_slots}</b></div>
       <div class="row"><span>Всего мест</span><b>${task.total_slots}</b></div>
       <button class="btn" onclick="takeTask(${task.id})">Выполнить</button>
@@ -620,26 +692,36 @@ function taskCard(task) {
   `;
 }
 
-async function loadTasks() {
+async function loadTasks(tab = "free", button) {
   const container = document.getElementById("allTasks");
   container.innerHTML = '<div class="loading">Загружаем задания...</div>';
 
+  if (button) {
+    button.parentElement.querySelectorAll("button")
+      .forEach(item => item.classList.remove("active"));
+    button.classList.add("active");
+  }
+
   try {
-    const data = await api("/api/tasks");
+    const data = await api(`/api/tasks?tab=${encodeURIComponent(tab)}`);
     currentTasks = data.tasks || [];
 
     container.innerHTML = currentTasks.length
-      ? currentTasks.map(taskCard).join("")
-      : '<div class="empty">Пока нет свободных заданий.</div>';
+      ? currentTasks.map(task => taskCard(task, tab)).join("")
+      : `<div class="empty">${tab === "free" ? "Пока нет свободных заданий." : tab === "active" ? "Нет заданий в работе." : "Нет заданий на проверке."}</div>`;
 
-    document.getElementById("homeTasks").innerHTML =
-      currentTasks.length
-        ? currentTasks.slice(0,2).map(taskCard).join("")
-        : '<div class="empty">Новых заданий пока нет.</div>';
+    if (tab === "free") {
+      document.getElementById("homeTasks").innerHTML =
+        currentTasks.length
+          ? currentTasks.slice(0,2).map(task => taskCard(task, "free")).join("")
+          : '<div class="empty">Новых заданий пока нет.</div>';
+    }
   } catch (error) {
     container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
-    document.getElementById("homeTasks").innerHTML =
-      `<div class="empty">${escapeHTML(error.message)}</div>`;
+    if (tab === "free") {
+      document.getElementById("homeTasks").innerHTML =
+        `<div class="empty">${escapeHTML(error.message)}</div>`;
+    }
   }
 }
 
@@ -665,6 +747,61 @@ async function takeTask(id) {
     notify(error.message);
   }
 }
+
+let taskPrices = {};
+
+function updateTaskPricePreview() {
+  const action = document.getElementById("taskAction").value;
+  const quantity = Number(document.getElementById("taskQuantity").value);
+  const preview = document.getElementById("taskPricePreview");
+  const price = taskPrices[action];
+
+  if (!Number.isFinite(price) || price <= 0) {
+    preview.textContent = "Стоимость этого типа задания пока не настроена. Публикация будет недоступна.";
+    return;
+  }
+
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10000) {
+    preview.textContent = "Укажи количество исполнителей от 1 до 10 000.";
+    return;
+  }
+
+  preview.textContent =
+    "Цена за одного исполнителя: " + money(price) +
+    " · Всего к резервированию: " + money(price * quantity);
+}
+
+async function loadTaskPrices() {
+  try {
+    const data = await api("/api/orders/prices");
+    taskPrices = data.prices || {};
+  } catch (error) {
+    taskPrices = {};
+  }
+  updateTaskPricePreview();
+}
+
+const taskPlatformsByAction = {
+  social_network: [["TikTok", "TikTok"], ["Instagram", "Instagram"], ["YouTube", "YouTube"], ["Telegram", "Telegram"], ["VK", "VK"]],
+  yandex_browser: [["Yandex Browser", "Яндекс Браузер"]],
+  yandex_maps: [["Yandex Maps", "Яндекс Карты"]]
+};
+
+function updateTaskPlatforms() {
+  const action = document.getElementById("taskAction").value;
+  const select = document.getElementById("taskPlatform");
+  const options = taskPlatformsByAction[action] || [];
+  select.innerHTML = options.map(([value, label]) =>
+    "<option value=\"" + escapeHTML(value) + "\">" + escapeHTML(label) + "</option>"
+  ).join("");
+}
+
+document.getElementById("taskAction").addEventListener("change", () => {
+  updateTaskPlatforms();
+  updateTaskPricePreview();
+});
+document.getElementById("taskQuantity").addEventListener("input", updateTaskPricePreview);
+updateTaskPlatforms();
 
 document.getElementById("createForm").addEventListener("submit", async event => {
   event.preventDefault();
@@ -702,6 +839,8 @@ document.getElementById("createForm").addEventListener("submit", async event => 
       `Заказ №${data.task_id} создан. Сумма резерва: ${money(data.total_price)}.`;
 
     document.getElementById("createForm").reset();
+    updateTaskPlatforms();
+    updateTaskPricePreview();
 
     await loadProfile();
     await loadMyTasks();
@@ -786,7 +925,7 @@ document.getElementById("topupForm").addEventListener("submit", async event => {
 
   const amount = Number(document.getElementById("topupAmount").value);
   const sender = document.getElementById("topupSender").value.trim();
-  const proof = document.getElementById("topupProof").value.trim();
+  const proofFile = document.getElementById("topupProof").files[0];
 
   if (!Number.isFinite(amount) || amount < 10 || !sender) {
     message.className = "small error";
@@ -798,10 +937,11 @@ document.getElementById("topupForm").addEventListener("submit", async event => {
   button.textContent = "Отправляем...";
 
   try {
+    const uploaded = proofFile ? await uploadImage(proofFile) : null;
     const payload = {
       amount,
       sender_name:sender,
-      proof_file_id:proof || null
+      proof_file_id:uploaded ? uploaded.file_id : null
     };
 
     const data = await api("/api/wallet/topups", {
@@ -823,6 +963,14 @@ document.getElementById("topupForm").addEventListener("submit", async event => {
   }
 });
 
+function calculateWithdrawalPreview(amount) {
+  const amountKopecks = Math.round(amount * 100);
+  const feeKopecks = Math.floor(amountKopecks * 10 / 100);
+  return {
+    fee:feeKopecks / 100,
+    payout:(amountKopecks - feeKopecks) / 100
+  };
+}
 function updateWithdrawalPreview() {
   const amount = Number(document.getElementById("withdrawAmount").value);
 
@@ -832,11 +980,10 @@ function updateWithdrawalPreview() {
     return;
   }
 
-  const fee = amount * 0.10;
-  const payout = amount - fee;
+  const amounts = calculateWithdrawalPreview(amount);
 
-  document.getElementById("withdrawFee").textContent = money(fee);
-  document.getElementById("withdrawPayout").textContent = money(payout);
+  document.getElementById("withdrawFee").textContent = money(amounts.fee);
+  document.getElementById("withdrawPayout").textContent = money(amounts.payout);
 }
 
 document.getElementById("withdrawAmount")
@@ -859,8 +1006,8 @@ document.getElementById("withdrawForm").addEventListener("submit", async event =
 
   if (!confirm(
     `Создать заявку на вывод ${money(amount)}?\n` +
-    `Комиссия: ${money(amount * 0.10)}\n` +
-    `К выплате: ${money(amount * 0.90)}`
+    `Комиссия: ${money(calculateWithdrawalPreview(amount).fee)}\n` +
+    `К выплате: ${money(calculateWithdrawalPreview(amount).payout)}`
   )) return;
 
   button.disabled = true;
@@ -957,6 +1104,32 @@ async function loadWalletRequests() {
   }
 }
 
+function platformText(platform) {
+  const labels = {
+    "Yandex Browser":"Яндекс Браузер",
+    "Yandex Maps":"Яндекс Карты"
+  };
+  return labels[platform] || platform || "—";
+}
+
+function taskActionText(action) {
+  const labels = {
+    social_network:"Социальные сети",
+    yandex_browser:"Яндекс Браузер",
+    yandex_maps:"Яндекс Карты"
+  };
+  return labels[action] || action || "Задание";
+}
+
+function orderStatusText(status) {
+  const labels = {
+    active:"Активен",
+    completed:"Завершён",
+    removed:"Снят администратором"
+  };
+  return labels[status] || status || "—";
+}
+
 async function loadMyTasks() {
   const targets = [
     document.getElementById("myTasks"),
@@ -975,14 +1148,16 @@ async function loadMyTasks() {
       <div class="task">
         <div class="task-top">
           <h3>${escapeHTML(task.title)}</h3>
-          <span class="status">${escapeHTML(task.status)}</span>
+          <span class="status">${escapeHTML(orderStatusText(task.status))}</span>
         </div>
+        <div class="small">Заказ №${task.id}</div>
         <div class="row"><span>Платформа</span><b>${escapeHTML(task.platform)}</b></div>
         <div class="row"><span>Всего мест</span><b>${task.total_slots}</b></div>
         <div class="row"><span>Свободно</span><b>${task.available_slots}</b></div>
         <div class="row"><span>В работе</span><b>${task.taken_slots}</b></div>
         <div class="row"><span>На проверке</span><b>${task.pending_review_slots}</b></div>
         <div class="row"><span>Одобрено</span><b>${task.approved_slots}</b></div>
+        <div class="row"><span>Общий прогресс</span><b>${task.total_slots ? Math.round(task.approved_slots / task.total_slots * 100) : 0}%</b></div>
         <div class="row"><span>В резерве</span><b>${money(task.reserved_balance)}</b></div>
       </div>
     `).join("") : '<div class="empty">Ты ещё не создавал заказы.</div>';
@@ -997,6 +1172,20 @@ async function loadMyTasks() {
       if (el) el.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
     });
   }
+}
+
+function workStatusText(status) {
+  const labels = {
+    taken:"В работе",
+    revision:"На доработке",
+    pending_review:"На проверке",
+    approved:"Выполнено",
+    expired:"Время истекло",
+    rejected:"Отклонено",
+    removed:"Исполнитель снят",
+    delisted:"Заказ снят"
+  };
+  return labels[status] || status || "—";
 }
 
 async function loadMyWork(tab = "active", button) {
@@ -1019,13 +1208,14 @@ async function loadMyWork(tab = "active", button) {
           <h3>${escapeHTML(item.title)}</h3>
           <div class="reward">${money(item.price)}</div>
         </div>
-        <div class="tag">${escapeHTML(item.platform)} · ${escapeHTML(item.action)}</div>
-        <div class="row"><span>Статус</span><b>${escapeHTML(item.status)}</b></div>
+        <div class="tag">${escapeHTML(platformText(item.platform))} · ${escapeHTML(taskActionText(item.action))}</div>
+        <p><a href="${escapeHTML(item.target_url)}" target="_blank" rel="noopener noreferrer">Перейти к заданию ↗</a></p>
+        <div class="row"><span>Статус</span><b>${escapeHTML(workStatusText(item.status))}</b></div>
         <div class="row">
           <span>Срок</span>
-          <b>${item.deadline_at ? new Date(item.deadline_at).toLocaleString("ru-RU") : "—"}</b>
+          <b>${(item.status === "taken" || item.status === "revision") && item.deadline_at ? new Date(item.deadline_at).toLocaleString("ru-RU") : "—"}</b>
         </div>
-        ${item.admin_reason ? `<div class="notice">Комментарий администратора: ${escapeHTML(item.admin_reason)}</div>` : ""}
+        ${(item.assignment_reason || item.admin_reason) ? `<div class="notice">Комментарий: ${escapeHTML(item.assignment_reason || item.admin_reason)}</div>` : ""}
         ${item.status === "taken" || item.status === "revision" ? `
           <button class="btn" onclick="submitWork(${item.task_id},${item.slot_id})">
             ${item.status === "revision" ? "Отправить доработку" : "Отправить результат"}
@@ -1042,22 +1232,22 @@ async function submitWork(taskId, slotId) {
   const proofUrl = prompt("Вставь ссылку на результат выполнения:");
   if (!proofUrl) return;
 
-  const screenshotId = prompt(
-    "Введи Telegram file_id скриншота. Загрузку скриншотов через интерфейс подключим отдельно."
-  );
-  if (!screenshotId) return;
+  const screenshotFile = await chooseImage();
+  if (!screenshotFile) return;
 
   try {
+    const uploaded = await uploadImage(screenshotFile);
     await api(`/api/orders/${taskId}/slots/${slotId}/submit`, {
       method:"POST",
       body:JSON.stringify({
         proof_url:proofUrl.trim(),
-        screenshot_file_id:screenshotId.trim()
+        screenshot_file_id:uploaded.file_id
       })
     });
 
     notify("Результат отправлен на проверку.");
     await loadMyWork("active");
+    await loadTasks("review", document.querySelector("#tasks .tabs button:nth-child(3)"));
   } catch (error) {
     notify(error.message);
   }
@@ -1120,25 +1310,46 @@ async function loadAdminReviews() {
     const data = await api("/api/orders/admin/reviews");
     const reviews = data.reviews || [];
 
-    container.innerHTML = reviews.length ? reviews.map(item => `
-      <div class="task">
-        <h3>${escapeHTML(item.title)}</h3>
-        <div class="small">Заказ №${item.task_id} · Исполнитель ${item.executor_id}</div>
-        <p>${escapeHTML(item.proof_url)}</p>
-        <div class="small">ID скриншота: ${escapeHTML(item.screenshot_file_id)}</div>
-        <div class="line"></div>
-        <button class="btn" onclick="reviewAction(${item.task_id},${item.slot_id},'approve')">Одобрить</button>
-        <div style="height:8px"></div>
-        <button class="btn secondary" onclick="reviewAction(${item.task_id},${item.slot_id},'revision')">На доработку</button>
-        <div style="height:8px"></div>
-        <button class="btn danger" onclick="reviewAction(${item.task_id},${item.slot_id},'reject')">Отклонить</button>
-      </div>
-    `).join("") : '<div class="empty">Нет заданий на проверке.</div>';
+    const cards = await Promise.all(reviews.map(async item => {
+      const imageUrl = await loadAdminMedia(item.screenshot_file_id);
+      return `
+        <div class="task">
+          <h3>${escapeHTML(item.title)}</h3>
+          <div class="small">Заказ №${item.task_id} · Исполнитель ${item.executor_id}</div>
+          <p><a href="${escapeHTML(item.proof_url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(item.proof_url)}</a></p>
+          ${imageUrl ? `<img src="${imageUrl}" alt="Скриншот выполнения" style="width:100%;height:auto;border-radius:12px;margin:8px 0">` : '<div class="small">Скриншот недоступен для просмотра.</div>'}
+          <div class="line"></div>
+          <button class="btn" onclick="reviewAction(${item.task_id},${item.slot_id},'approve')">Одобрить</button>
+          <div style="height:8px"></div>
+          <button class="btn secondary" onclick="reviewAction(${item.task_id},${item.slot_id},'revision')">На доработку</button>
+          <div style="height:8px"></div>
+          <button class="btn danger" onclick="reviewAction(${item.task_id},${item.slot_id},'reject')">Отклонить</button>
+          <div style="height:8px"></div>
+          <button class="btn secondary" onclick="reviewAction(${item.task_id},${item.slot_id},'remove-executor')">Снять исполнителя</button>
+        </div>
+      `;
+    }));
+    container.innerHTML = cards.join("") || '<div class="empty">Нет заданий на проверке.</div>';
   } catch (error) {
     container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
   }
 }
 
+async function adminDelistTask() {
+  const taskId = Number(document.getElementById("delistTaskId").value);
+  const reason = document.getElementById("delistTaskReason").value.trim();
+  if (!Number.isInteger(taskId) || taskId <= 0 || reason.length < 3) { notify("Укажи номер заказа и причину."); return; }
+  if (!confirm("Снять заказ? Штраф составит 10% от первоначальной стоимости, остаток резерва вернётся заказчику.")) return;
+  try {
+    const result = await api("/api/orders/" + taskId + "/delist", {method:"POST", body:JSON.stringify({reason})});
+    notify("Заказ снят. Штраф: " + money(result.penalty) + ". Возврат: " + money(result.refund) + ".");
+    document.getElementById("delistTaskId").value = "";
+    document.getElementById("delistTaskReason").value = "";
+    await loadAdminReviews();
+    await loadAdminAssignments();
+    await loadMyTasks();
+  } catch (error) { notify(error.message); }
+}
 async function reviewAction(taskId, slotId, action) {
   let reason = "";
 
@@ -1162,6 +1373,7 @@ async function reviewAction(taskId, slotId, action) {
 
     notify("Действие выполнено.");
     await loadAdminReviews();
+    await loadAdminAssignments();
     await loadProfile();
   } catch (error) {
     notify(error.message);
@@ -1184,7 +1396,8 @@ async function loadAdminTopups() {
         <div class="row"><span>Отправитель</span><b>${escapeHTML(item.sender_name)}</b></div>
         <div class="row"><span>Банк получателя</span><b>${escapeHTML(item.sbp_bank)}</b></div>
         <div class="row"><span>Телефон СБП</span><b>${escapeHTML(item.sbp_phone)}</b></div>
-        <div class="small">Подтверждение file_id: ${escapeHTML(item.proof_file_id || "Не приложено")}</div>
+        <div class="small">Подтверждение: ${item.proof_file_id ? "загружено" : "не приложено"}</div>
+        <div id="topup-proof-${item.id}" class="small"></div>
         <div class="small">${new Date(item.created_at).toLocaleString("ru-RU")}</div>
         <div class="action-buttons">
           <button class="btn" onclick="adminTopupAction(${item.id},'approve')">Подтвердить пополнение</button>
@@ -1192,6 +1405,14 @@ async function loadAdminTopups() {
         </div>
       </div>
     `).join("") : '<div class="empty">Нет заявок на пополнение.</div>';
+    for (const item of requests) {
+      if (!item.proof_file_id) continue;
+      const imageUrl = await loadAdminMedia(item.proof_file_id);
+      const target = document.getElementById("topup-proof-" + item.id);
+      if (target && imageUrl) {
+        target.innerHTML = '<img src="' + imageUrl + '" alt="Подтверждение перевода" style="width:100%;height:auto;border-radius:12px;margin:8px 0">';
+      }
+    }
   } catch (error) {
     container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
   }
@@ -1326,6 +1547,55 @@ document.getElementById("sbpForm").addEventListener("submit", async event => {
   }
 });
 
+async function adminRemoveExecutor(taskId, slotId) {
+  const reason = prompt("Укажи причину снятия исполнителя:");
+  if (!reason || reason.trim().length < 3) return;
+  if (!confirm("Снять исполнителя с этого места? Место снова станет свободным, резерв останется у заказа.")) return;
+
+  try {
+    await api(`/api/orders/${taskId}/slots/${slotId}/remove-executor`, {
+      method:"POST",
+      body:JSON.stringify({reason:reason.trim()})
+    });
+    notify("Исполнитель снят. Место снова доступно.");
+    await loadAdminAssignments();
+    await loadAdminReviews();
+  } catch (error) {
+    notify(error.message);
+  }
+}
+
+async function loadAdminAssignments() {
+  const container = document.getElementById("adminAssignments");
+  container.innerHTML = '<div class="loading">Загружаем историю...</div>';
+
+  try {
+    const data = await api("/api/admin/assignments");
+    const assignments = data.assignments || [];
+    container.innerHTML = assignments.length ? assignments.map(item => {
+      const status = item.outcome || item.slot_status || "taken";
+      const executor = item.first_name || item.username || "Пользователь";
+      return `
+        <div class="panel">
+          <div class="row">
+            <b>${escapeHTML(item.title)}</b>
+            <span class="status">${escapeHTML(workStatusText(status))}</span>
+          </div>
+          <div class="small">Заказ №${item.task_id} · Место №${item.slot_id}</div>
+          <div class="small">Исполнитель: ${escapeHTML(executor)} · ID ${item.executor_id}</div>
+          <div class="small">Начало: ${new Date(item.assigned_at).toLocaleString("ru-RU")}</div>
+          ${item.deadline_at && !item.ended_at && (status === "taken" || status === "revision") ? `<div class="small">Срок: ${new Date(item.deadline_at).toLocaleString("ru-RU")}</div>` : ""}
+          ${item.ended_at ? `<div class="small">Завершено: ${new Date(item.ended_at).toLocaleString("ru-RU")}</div>` : ""}
+          ${item.reason ? `<div class="notice">${escapeHTML(item.reason)}</div>` : ""}
+          ${!item.ended_at ? `<button class="btn danger" onclick="adminRemoveExecutor(${item.task_id},${item.slot_id})">Снять исполнителя</button>` : ""}
+        </div>
+      `;
+    }).join("") : '<div class="empty">История пока пуста.</div>';
+  } catch (error) {
+    container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
+  }
+}
+
 async function loadAdminActions() {
   const container = document.getElementById("adminActions");
   container.innerHTML = '<div class="loading">Загружаем журнал...</div>';
@@ -1361,6 +1631,7 @@ async function initialize() {
   }
 
   await loadProfile();
+  await loadTaskPrices();
   await loadTasks();
   await loadNotifications();
   await checkAdmin();
@@ -1372,7 +1643,14 @@ async function initialize() {
   await loadWalletHistory();
 
   if (!document.getElementById("adminArea").classList.contains("hidden")) {
-    await loadAdminSbp();
+    await Promise.all([
+      loadAdminSbp(),
+      loadAdminReviews(),
+      loadAdminAssignments(),
+      loadAdminTopups(),
+      loadAdminWithdrawals(),
+      loadAdminActions()
+    ]);
   }
 }
 
