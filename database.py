@@ -103,6 +103,18 @@ SCHEMA = [
     CREATE INDEX IF NOT EXISTS idx_slot_assignments_executor
     ON task_slot_assignments(executor_id, assigned_at DESC)
     """,
+    """
+    INSERT INTO task_slot_assignments (task_id, slot_id, executor_id)
+    SELECT s.task_id, s.id, s.executor_id
+    FROM task_slots s
+    WHERE s.executor_id IS NOT NULL
+      AND s.status IN ('taken', 'revision', 'pending_review')
+      AND NOT EXISTS (
+          SELECT 1 FROM task_slot_assignments a
+          WHERE a.slot_id = s.id AND a.executor_id = s.executor_id
+            AND a.ended_at IS NULL
+      )
+    """,
 
     """
     CREATE TABLE IF NOT EXISTS submissions (
@@ -210,6 +222,11 @@ SCHEMA = [
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS initial_total_kopecks BIGINT NOT NULL DEFAULT 0",
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS penalty_kopecks BIGINT NOT NULL DEFAULT 0",
+    """
+    UPDATE tasks
+    SET initial_total_kopecks = unit_price_kopecks * total_slots
+    WHERE initial_total_kopecks = 0
+    """,
     "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     "ALTER TABLE task_slots ADD COLUMN IF NOT EXISTS slot_number INTEGER",
     "ALTER TABLE task_slots ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ",
