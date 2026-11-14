@@ -667,26 +667,61 @@ function taskCard(task) {
   `;
 }
 
-async function loadTasks() {
+function executorTaskCard(task) {
+  const canSubmit = task.status === "taken" || task.status === "revision";
+  return `
+    <div class="task">
+      <div class="task-top">
+        <h3>${escapeHTML(task.title)}</h3>
+        <div class="reward">${money(task.price)}</div>
+      </div>
+      <div class="tag">${escapeHTML(task.platform)} · ${escapeHTML(task.action)}</div>
+      <p>${escapeHTML(task.description)}</p>
+      <p><a href="${escapeHTML(task.target_url)}" target="_blank" rel="noopener noreferrer">Перейти к заданию ↗</a></p>
+      <div class="row"><span>Статус</span><b>${escapeHTML(workStatusText(task.status))}</b></div>
+      ${task.deadline_at ? `<div class="row"><span>Срок</span><b>${new Date(task.deadline_at).toLocaleString("ru-RU")}</b></div>` : ""}
+      ${task.admin_reason ? `<div class="notice">${escapeHTML(task.admin_reason)}</div>` : ""}
+      ${canSubmit ? `<button class="btn" onclick="submitWork(${task.id},${task.slot_id})">${task.status === "revision" ? "Отправить доработку" : "Отправить результат"}</button>` : ""}
+    </div>
+  `;
+}
+
+async function loadTasks(tab = "free", button) {
   const container = document.getElementById("allTasks");
   container.innerHTML = '<div class="loading">Загружаем задания...</div>';
 
+  if (button) {
+    button.parentElement.querySelectorAll("button")
+      .forEach(item => item.classList.remove("active"));
+    button.classList.add("active");
+  }
+
   try {
-    const data = await api("/api/tasks");
+    const data = await api(`/api/tasks?tab=${encodeURIComponent(tab)}`);
     currentTasks = data.tasks || [];
 
     container.innerHTML = currentTasks.length
-      ? currentTasks.map(taskCard).join("")
-      : '<div class="empty">Пока нет свободных заданий.</div>';
+      ? (tab === "free"
+          ? currentTasks.map(taskCard).join("")
+          : currentTasks.map(executorTaskCard).join(""))
+      : (tab === "free"
+          ? '<div class="empty">Пока нет свободных заданий.</div>'
+          : tab === "active"
+            ? '<div class="empty">Сейчас у тебя нет заданий в работе.</div>'
+            : '<div class="empty">Нет заданий, ожидающих проверки.</div>');
 
-    document.getElementById("homeTasks").innerHTML =
-      currentTasks.length
-        ? currentTasks.slice(0,2).map(taskCard).join("")
-        : '<div class="empty">Новых заданий пока нет.</div>';
+    if (tab === "free") {
+      document.getElementById("homeTasks").innerHTML =
+        currentTasks.length
+          ? currentTasks.slice(0,2).map(taskCard).join("")
+          : '<div class="empty">Новых заданий пока нет.</div>';
+    }
   } catch (error) {
     container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
-    document.getElementById("homeTasks").innerHTML =
-      `<div class="empty">${escapeHTML(error.message)}</div>`;
+    if (tab === "free") {
+      document.getElementById("homeTasks").innerHTML =
+        `<div class="empty">${escapeHTML(error.message)}</div>`;
+    }
   }
 }
 
