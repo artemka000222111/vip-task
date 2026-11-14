@@ -1,0 +1,32 @@
+name: Validate VIP TASK
+
+on:
+  push:
+    branches:
+      - vip-task-work
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Compile Python
+        run: python -m compileall -q .
+      - name: Check Mini App JavaScript syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path("index.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script[^>]*>(.*?)</script>", html, re.S)
+          Path("/tmp/vip-task.js").write_text("\n".join(scripts), encoding="utf-8")
+          PY
+          node --check /tmp/vip-task.js
