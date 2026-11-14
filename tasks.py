@@ -186,6 +186,17 @@ async def expire_overdue_slots(conn):
 
         await conn.execute(
             """
+            UPDATE task_slot_assignments
+            SET ended_at = NOW(), outcome = 'expired',
+                reason = 'Истекло время выполнения или доработки'
+            WHERE slot_id = $1 AND executor_id = $2 AND ended_at IS NULL
+            """,
+            slot["id"],
+            slot["executor_id"],
+        )
+
+        await conn.execute(
+            """
             UPDATE task_slots
             SET status = 'free',
                 executor_id = NULL,
@@ -466,6 +477,18 @@ async def take_task(task_id: int, request: Request):
                 executor_id,
                 deadline,
                 slot["id"],
+            )
+
+            await conn.execute(
+                """
+                INSERT INTO task_slot_assignments (
+                    task_id, slot_id, executor_id
+                )
+                VALUES ($1, $2, $3)
+                """,
+                task_id,
+                slot["id"],
+                executor_id,
             )
 
     return {
@@ -800,6 +823,16 @@ async def approve_task(
                 WHERE id = $1
                 """,
                 slot_id,
+            )
+
+            await conn.execute(
+                """
+                UPDATE task_slot_assignments
+                SET ended_at = NOW(), outcome = 'approved'
+                WHERE slot_id = $1 AND executor_id = $2 AND ended_at IS NULL
+                """,
+                slot_id,
+                slot["executor_id"],
             )
 
             await conn.execute(
