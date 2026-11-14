@@ -1374,6 +1374,50 @@ async def get_admin_status(request: Request):
 # ЖУРНАЛ ДЕЙСТВИЙ АДМИНИСТРАТОРА
 # ==================================================
 
+@router.get("/admin/assignments")
+async def get_admin_assignments(
+    request: Request,
+    limit: int = Query(default=200, ge=1, le=500),
+):
+    await require_admin(request)
+    pool = request.app.state.db_pool
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT
+                a.id, a.task_id, a.slot_id, a.executor_id,
+                u.first_name, u.username, t.title,
+                a.assigned_at, a.ended_at, a.outcome, a.reason
+            FROM task_slot_assignments a
+            JOIN users u ON u.telegram_id = a.executor_id
+            JOIN tasks t ON t.id = a.task_id
+            ORDER BY a.assigned_at DESC
+            LIMIT $1
+            """,
+            limit,
+        )
+
+    return {
+        "assignments": [
+            {
+                "id": row["id"],
+                "task_id": row["task_id"],
+                "slot_id": row["slot_id"],
+                "executor_id": row["executor_id"],
+                "first_name": row["first_name"],
+                "username": row["username"],
+                "title": row["title"],
+                "assigned_at": row["assigned_at"].isoformat(),
+                "ended_at": row["ended_at"].isoformat() if row["ended_at"] else None,
+                "outcome": row["outcome"],
+                "reason": row["reason"],
+            }
+            for row in rows
+        ]
+    }
+
+
 @router.get("/admin/actions")
 async def get_admin_actions(
     request: Request,
