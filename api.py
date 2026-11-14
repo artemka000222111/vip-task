@@ -555,6 +555,10 @@ async def get_my_work(
                 s.id AS slot_id,
                 s.task_id,
                 s.status AS slot_status,
+                a.outcome AS assignment_outcome,
+                a.reason AS assignment_reason,
+                a.assigned_at,
+                a.ended_at,
                 s.taken_at,
                 s.deadline_at,
                 s.completed_at,
@@ -571,18 +575,21 @@ async def get_my_work(
                 sub.revision_count,
                 sub.revision_deadline,
                 sub.admin_reason
-            FROM task_slots s
-            JOIN tasks t ON t.id = s.task_id
+            FROM task_slot_assignments a
+            JOIN task_slots s ON s.id = a.slot_id
+            JOIN tasks t ON t.id = a.task_id
             LEFT JOIN submissions sub ON sub.slot_id = s.id
-            WHERE s.executor_id = $1
+            WHERE a.executor_id = $1
               AND (
                   $2 = 'all'
-                  OR ($2 = 'active' AND s.status IN (
-                      'taken', 'revision', 'pending_review'
-                  ))
-                  OR ($2 = 'approved' AND s.status = 'approved')
+                  OR (
+                      $2 = 'active'
+                      AND a.ended_at IS NULL
+                      AND s.status IN ('taken', 'revision', 'pending_review')
+                  )
+                  OR ($2 = 'approved' AND a.outcome = 'approved')
               )
-            ORDER BY s.taken_at DESC NULLS LAST
+            ORDER BY a.assigned_at DESC
             LIMIT 100
             """,
             telegram_id,
@@ -594,7 +601,11 @@ async def get_my_work(
             {
                 "slot_id": row["slot_id"],
                 "task_id": row["task_id"],
-                "status": row["slot_status"],
+                "status": (
+                    row["assignment_outcome"]
+                    if row["ended_at"] is not None and row["assignment_outcome"]
+                    else row["slot_status"]
+                ),
                 "platform": row["platform"],
                 "action": row["action"],
                 "title": row["title"],
@@ -602,7 +613,7 @@ async def get_my_work(
                 "target_url": row["target_url"],
                 "price": row["unit_price_kopecks"] / 100,
                 "task_status": row["task_status"],
-                "taken_at": row["taken_at"].isoformat() if row["taken_at"] else None,
+                "taken_at": row["assigned_at"].isoformat() if row["assigned_at"] else None,
                 "deadline_at": row["deadline_at"].isoformat() if row["deadline_at"] else None,
                 "completed_at": row["completed_at"].isoformat() if row["completed_at"] else None,
                 "proof_url": row["proof_url"],
@@ -611,11 +622,12 @@ async def get_my_work(
                 "revision_count": row["revision_count"],
                 "revision_deadline": row["revision_deadline"].isoformat() if row["revision_deadline"] else None,
                 "admin_reason": row["admin_reason"],
+                "assignment_reason": row["assignment_reason"],
+                "ended_at": row["ended_at"].isoformat() if row["ended_at"] else None,
             }
             for row in rows
         ]
     }
-
 
 # ==================================================
 # ИСТОРИЯ КОШЕЛЬКА
