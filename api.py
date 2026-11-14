@@ -270,6 +270,12 @@ async def upload_media(request: Request, file: UploadFile = File(...)):
             uploaded_file_id,
             telegram_id,
         )
+        stored_owner = await conn.fetchval(
+            "SELECT telegram_id FROM uploaded_media WHERE file_id = $1",
+            uploaded_file_id,
+        )
+        if stored_owner != telegram_id:
+            raise HTTPException(409, "Это изображение уже связано с другим аккаунтом")
 
     return {"success": True, "file_id": uploaded_file_id}
 
