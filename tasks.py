@@ -148,51 +148,46 @@ async def expire_overdue_slots(conn):
     notifications = []
 
     for slot in expired:
-        if slot["executor_id"] is None:
-            continue
+        executor_id = slot["executor_id"]
+        if executor_id is not None:
+            notifications.append({
+                "executor_id": executor_id,
+                "task_id": slot["task_id"],
+                "title": slot["title"],
+            })
 
-        notifications.append({
-            "executor_id": slot["executor_id"],
-            "task_id": slot["task_id"],
-            "title": slot["title"],
-        })
-
-        await conn.execute(
-            """
-            INSERT INTO task_bans (
-                task_id,
+            await conn.execute(
+                """
+                INSERT INTO task_bans (
+                    task_id, executor_id, reason
+                )
+                VALUES ($1, $2, $3)
+                ON CONFLICT (task_id, executor_id) DO NOTHING
+                """,
+                slot["task_id"],
                 executor_id,
-                reason
+                "Истекло время выполнения или доработки",
             )
-            VALUES ($1, $2, $3)
-            ON CONFLICT (task_id, executor_id)
-            DO NOTHING
-            """,
-            slot["task_id"],
-            slot["executor_id"],
-            "Истекло время выполнения или доработки",
-        )
+
+            await conn.execute(
+                """
+                UPDATE task_slot_assignments
+                SET ended_at = NOW(), outcome = 'expired',
+                    reason = 'Истекло время выполнения или доработки'
+                WHERE slot_id = $1 AND executor_id = $2 AND ended_at IS NULL
+                """,
+                slot["id"],
+                executor_id,
+            )
 
         await conn.execute(
             """
             UPDATE submissions
-            SET status = 'expired',
-                updated_at = NOW()
+            SET status = 'expired', updated_at = NOW()
             WHERE slot_id = $1
               AND status IN ('pending', 'revision_requested')
             """,
             slot["id"],
-        )
-
-        await conn.execute(
-            """
-            UPDATE task_slot_assignments
-            SET ended_at = NOW(), outcome = 'expired',
-                reason = 'Истекло время выполнения или доработки'
-            WHERE slot_id = $1 AND executor_id = $2 AND ended_at IS NULL
-            """,
-            slot["id"],
-            slot["executor_id"],
         )
 
         await conn.execute(
