@@ -264,8 +264,18 @@ async def create_task(data: CreateTaskRequest, request: Request):
 
     pool = request.app.state.db_pool
 
+    platform = data.platform.strip()
+    title = data.title.strip()
+    description = data.description.strip()
+    if platform not in {"TikTok", "Instagram", "YouTube", "Telegram", "VK", "Yandex", "Website"}:
+        raise HTTPException(400, "Неизвестная платформа")
+    if len(title) < 3:
+        raise HTTPException(400, "Название должно содержать минимум 3 символа")
+    if len(description) < 5:
+        raise HTTPException(400, "Описание должно содержать минимум 5 символов")
+
     unit_price = get_action_price(data.action)
-    target_url = validate_url(data.target_url)
+    target_url = validate_url(data.target_url.strip())
 
     total_amount = unit_price * data.quantity
 
@@ -310,10 +320,10 @@ async def create_task(data: CreateTaskRequest, request: Request):
                 RETURNING id
                 """,
                 customer_id,
-                data.platform,
+                platform,
                 data.action,
-                data.title,
-                data.description,
+                title,
+                description,
                 target_url,
                 unit_price,
                 data.quantity,
