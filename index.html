@@ -1624,7 +1624,14 @@ async function initialize() {
   await loadWalletHistory();
 
   if (!document.getElementById("adminArea").classList.contains("hidden")) {
-    await loadAdminSbp();
+    await Promise.all([
+      loadAdminSbp(),
+      loadAdminReviews(),
+      loadAdminAssignments(),
+      loadAdminTopups(),
+      loadAdminWithdrawals(),
+      loadAdminActions()
+    ]);
   }
 }
 
