@@ -112,7 +112,7 @@ class RemoveExecutorIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 await conn.execute(f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE')
             await self.admin_pool.close()
 
-    async def test_removal_frees_slot_keeps_reserve_and_bans_executor(self):
+    async def test_removal_frees_slot_keeps_reserve_without_banning_executor(self):
         with patch(
             "tasks.require_admin",
             new=AsyncMock(return_value={"id": self.admin_id}),
@@ -154,7 +154,7 @@ class RemoveExecutorIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(assignment["ended_at"])
         self.assertEqual(assignment["outcome"], "removed")
         self.assertEqual(assignment["reason"], "Проверка администратором")
-        self.assertEqual(ban_count, 1)
+        self.assertEqual(ban_count, 0)
         self.assertEqual(reserve, 1000)
 
 
