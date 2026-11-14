@@ -1005,6 +1005,16 @@ async def delist_task(task_id: int, data: ReviewReasonRequest, request: Request)
             )
             await conn.execute(
                 """
+                UPDATE task_slot_assignments
+                SET ended_at = NOW(), outcome = 'delisted', reason = $1
+                WHERE task_id = $2 AND ended_at IS NULL
+                """,
+                data.reason,
+                task_id,
+            )
+
+            await conn.execute(
+                """
                 UPDATE task_slots SET status = 'cancelled', deadline_at = NULL
                 WHERE task_id = $1 AND status <> 'approved'
                 """,
@@ -1272,6 +1282,28 @@ async def reject_task(
                     executor_id,
                     data.reason,
                 )
+
+            await conn.execute(
+                """
+                UPDATE task_slot_assignments
+                SET ended_at = NOW(), outcome = 'rejected', reason = $1
+                WHERE slot_id = $2 AND executor_id = $3 AND ended_at IS NULL
+                """,
+                data.reason,
+                slot_id,
+                executor_id,
+            )
+
+            await conn.execute(
+                """
+                UPDATE task_slot_assignments
+                SET ended_at = NOW(), outcome = 'removed', reason = $1
+                WHERE slot_id = $2 AND executor_id = $3 AND ended_at IS NULL
+                """,
+                data.reason,
+                slot_id,
+                executor_id,
+            )
 
             await conn.execute(
                 """
