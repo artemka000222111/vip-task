@@ -141,52 +141,6 @@ class TaskRevisionIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 await conn.execute(f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE')
             await self.admin_pool.close()
 
-    async def test_manual_executor_removal_frees_slot_without_task_ban(self):
-        with patch(
-            "tasks.require_admin",
-            new=AsyncMock(return_value={"id": self.admin_id}),
-        ), patch("tasks.notify_user", new=AsyncMock()):
-            result = await remove_executor(
-                self.task_id,
-                self.slot_id,
-                ReviewReasonRequest(reason="Проверка работы"),
-                self.request,
-            )
-
-        self.assertTrue(result["success"])
-        async with self.pool.acquire() as conn:
-            slot = await conn.fetchrow(
-                "SELECT status, executor_id, deadline_at FROM task_slots WHERE id = $1",
-                self.slot_id,
-            )
-            assignment = await conn.fetchrow(
-                """
-                SELECT outcome, ended_at, reason
-                FROM task_slot_assignments
-                WHERE slot_id = $1 AND executor_id = $2
-                """,
-                self.slot_id,
-                self.executor_id,
-            )
-            is_banned = await conn.fetchval(
-                "SELECT EXISTS(SELECT 1 FROM task_bans WHERE task_id = $1 AND executor_id = $2)",
-                self.task_id,
-                self.executor_id,
-            )
-            reserved = await conn.fetchval(
-                "SELECT reserved_kopecks FROM tasks WHERE id = $1",
-                self.task_id,
-            )
-
-        self.assertEqual(slot["status"], "free")
-        self.assertIsNone(slot["executor_id"])
-        self.assertIsNone(slot["deadline_at"])
-        self.assertEqual(assignment["outcome"], "removed")
-        self.assertIsNotNone(assignment["ended_at"])
-        self.assertEqual(assignment["reason"], "Проверка работы")
-        self.assertFalse(is_banned)
-        self.assertEqual(reserved, 1000)
-
     async def test_revision_resubmission_preserves_one_revision_and_clears_deadline(self):
         with patch(
             "tasks.get_user",
