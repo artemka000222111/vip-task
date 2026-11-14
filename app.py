@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 
 import asyncpg
 from aiogram import Bot, Dispatcher
@@ -14,16 +15,17 @@ from aiogram.types import (
     WebAppInfo,
 )
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 
 from database import init_db
 from api import router as api_router
 from tasks import router as tasks_router
+from tasks import expire_overdue_slots
 
 
-# -----------------------------
+# ==========================================
 # LOGGING
-# -----------------------------
+# ==========================================
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,13 +35,15 @@ logging.basicConfig(
 logger = logging.getLogger("vip-task")
 
 
-# -----------------------------
+# ==========================================
 # BOT
-# -----------------------------
+# ==========================================
 
 bot = None
 dp = Dispatcher()
+
 polling_task = None
+expiration_task = None
 
 
 @dp.message(CommandStart())
@@ -70,13 +74,41 @@ async def start_handler(message: Message):
         )
 
 
-# -----------------------------
+# ==========================================
+# AUTOMATIC TASK EXPIRATION
+# ==========================================
+
+async def expiration_loop(pool):
+    logger.info("Запущена автоматическая проверка сроков заданий")
+
+    while True:
+        try:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    expired_count = await expire_overdue_slots(conn)
+
+            if expired_count:
+                logger.info(
+                    "Автоматически освобождено просроченных мест: %s",
+                    expired_count,
+                )
+
+        except asyncio.CancelledError:
+            raise
+
+        except Exception:
+            logger.exception("Ошибка автоматической проверки сроков")
+
+        await asyncio.sleep(30)
+
+
+# ==========================================
 # APPLICATION LIFESPAN
-# -----------------------------
+# ==========================================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global bot, polling_task
+    global bot, polling_task, expiration_task
 
     token = os.getenv("BOT_TOKEN")
     database_url = os.getenv("DATABASE_URL")
@@ -105,6 +137,12 @@ async def lifespan(app: FastAPI):
 
         await init_db(pool)
 
+        logger.info("Запуск автоматической проверки сроков...")
+
+        expiration_task = asyncio.create_task(
+            expiration_loop(pool)
+        )
+
         logger.info("Запуск Telegram-бота...")
 
         bot = Bot(token=token)
@@ -121,6 +159,14 @@ async def lifespan(app: FastAPI):
 
     finally:
         logger.info("Остановка VIP TASK...")
+
+        if expiration_task and not expiration_task.done():
+            expiration_task.cancel()
+
+            with suppress(asyncio.CancelledError):
+                await expiration_task
+
+        expiration_task = None
 
         if polling_task and not polling_task.done():
             polling_task.cancel()
@@ -140,9 +186,9 @@ async def lifespan(app: FastAPI):
         logger.info("VIP TASK остановлен")
 
 
-# -----------------------------
+# ==========================================
 # FASTAPI
-# -----------------------------
+# ==========================================
 
 app = FastAPI(
     title="VIP TASK",
@@ -152,30 +198,42 @@ app = FastAPI(
 )
 
 
-# -----------------------------
+# ==========================================
 # ROUTERS
-# -----------------------------
+# ==========================================
 
 app.include_router(api_router)
 app.include_router(tasks_router)
 
 
-# -----------------------------
-# MAIN PAGE
-# -----------------------------
+# ==========================================
+# MINI APP
+# ==========================================
+
+BASE_DIR = Path(__file__).resolve().parent
+INDEX_FILE = BASE_DIR / "index.html"
+
 
 @app.get("/")
 async def home():
-    return {
-        "app": "VIP TASK",
-        "status": "online",
-        "message": "VIP TASK API работает",
-    }
+    if not INDEX_FILE.is_file():
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status": "error",
+                "message": "Файл index.html не найден",
+            },
+        )
+
+    return FileResponse(
+        INDEX_FILE,
+        media_type="text/html",
+    )
 
 
-# -----------------------------
+# ==========================================
 # HEALTH CHECK
-# -----------------------------
+# ==========================================
 
 @app.get("/health")
 async def health():
