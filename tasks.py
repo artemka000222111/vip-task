@@ -212,7 +212,7 @@ async def notify_expired_executors(app, expired_slots):
             item["executor_id"],
             "task",
             "⌛ Время выполнения задания истекло.\n\n"
-            f"Заказ №{item['task_id']}: {item['title']}\\n"
+            f"Заказ №{item['task_id']}: {item['title']}\n"
             "Место освобождено, повторно взять этот заказ ты не сможешь.",
         )
 
