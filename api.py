@@ -4,8 +4,9 @@ from typing import Optional
 import os
 import json
 
-from fastapi import APIRouter, Request, HTTPException, Query
+from fastapi import APIRouter, Request, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel, Field
+from aiogram.types import BufferedInputFile
 
 from auth import verify_telegram_init_data
 from finance import (
@@ -209,6 +210,55 @@ class NotificationSettingsUpdate(BaseModel):
     wallet_notifications: Optional[bool] = None
     review_notifications: Optional[bool] = None
     system_notifications: Optional[bool] = None
+
+
+# ==================================================
+# ЗАГРУЗКА ИЗОБРАЖЕНИЙ С ТЕЛЕФОНА
+# ==================================================
+
+@router.post("/media/upload")
+async def upload_media(request: Request, file: UploadFile = File(...)):
+    user = await get_user(request)
+    telegram_id = int(user["id"])
+
+    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(400, "Можно загрузить только JPG, PNG или WEBP")
+
+    content = await file.read(5 * 1024 * 1024 + 1)
+    if not content:
+        raise HTTPException(400, "Файл пустой")
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(413, "Максимальный размер изображения — 5 МБ")
+
+    bot = getattr(request.app.state, "bot", None)
+    if bot is None:
+        raise HTTPException(503, "Загрузка временно недоступна")
+
+    uploaded_file_id = None
+    errors = []
+    for admin_id in sorted(get_admin_ids()):
+        try:
+            message = await bot.send_photo(
+                chat_id=admin_id,
+                photo=BufferedInputFile(
+                    content,
+                    filename=file.filename or "vip-task-image",
+                ),
+                caption=f"📎 Вложение VIP TASK от пользователя {telegram_id}",
+            )
+            uploaded_file_id = message.photo[-1].file_id
+            break
+        except Exception as error:
+            errors.append(str(error))
+
+    if not uploaded_file_id:
+        raise HTTPException(
+            503,
+            "Не удалось передать изображение администратору. Проверь, что бот может писать администратору.",
+        )
+
+    return {"success": True, "file_id": uploaded_file_id}
 
 
 # ==================================================
