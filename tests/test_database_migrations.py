@@ -114,7 +114,7 @@ class DatabaseMigrationIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 """
                 SELECT outcome, ended_at
                 FROM task_slot_assignments
-                WHERE slot_id = $1 AND executor_id = $2
+                WHERE slot_id = $1 AND executor_id = $2 AND outcome = 'approved'
                 """,
                 approved_slot_id,
                 executor_id,
