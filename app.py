@@ -304,16 +304,16 @@ async def lifespan(app: FastAPI):
         logger.info("Инициализация базы данных...")
         await init_db(db_pool)
 
-        expiration_task = asyncio.create_task(
-            expiration_loop(db_pool, app)
-        )
-
         logger.info("Запуск Telegram-бота...")
 
         bot = Bot(token=token)
         app.state.bot = bot
 
         await bot.delete_webhook(drop_pending_updates=True)
+
+        expiration_task = asyncio.create_task(
+            expiration_loop(db_pool, app)
+        )
 
         polling_task = asyncio.create_task(
             dp.start_polling(bot)
