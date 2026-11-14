@@ -18,9 +18,15 @@ router = APIRouter(prefix="/api/orders", tags=["orders"])
 # ==========================================
 
 ACTION_PRICE_ENV = {
-    "survey": "TASK_PRICE_SURVEY_KOPECKS",
-    "content_feedback": "TASK_PRICE_FEEDBACK_KOPECKS",
-    "usability_test": "TASK_PRICE_USABILITY_KOPECKS",
+    "social_network": "TASK_PRICE_SOCIAL_NETWORK_KOPECKS",
+    "yandex_browser": "TASK_PRICE_YANDEX_BROWSER_KOPECKS",
+    "yandex_maps": "TASK_PRICE_YANDEX_MAPS_KOPECKS",
+}
+
+ALLOWED_PLATFORMS_BY_ACTION = {
+    "social_network": {"TikTok", "Instagram", "YouTube", "Telegram", "VK"},
+    "yandex_browser": {"Yandex Browser"},
+    "yandex_maps": {"Yandex Maps"},
 }
 
 WORK_HOURS = 1
@@ -267,8 +273,11 @@ async def create_task(data: CreateTaskRequest, request: Request):
     platform = data.platform.strip()
     title = data.title.strip()
     description = data.description.strip()
-    if platform not in {"TikTok", "Instagram", "YouTube", "Telegram", "VK", "Yandex", "Website"}:
-        raise HTTPException(400, "Неизвестная платформа")
+    allowed_platforms = ALLOWED_PLATFORMS_BY_ACTION.get(data.action)
+    if not allowed_platforms:
+        raise HTTPException(400, "Неизвестное направление задания")
+    if platform not in allowed_platforms:
+        raise HTTPException(400, "Площадка не соответствует выбранному направлению")
     if len(title) < 3:
         raise HTTPException(400, "Название должно содержать минимум 3 символа")
     if len(description) < 5:
