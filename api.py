@@ -233,6 +233,22 @@ async def upload_media(request: Request, file: UploadFile = File(...)):
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(413, "Максимальный размер изображения — 5 МБ")
 
+    valid_signature = (
+        (file.content_type == "image/jpeg" and content.startswith(b"\\xff\\xd8\\xff"))
+        or (
+            file.content_type == "image/png"
+            and content.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+        )
+        or (
+            file.content_type == "image/webp"
+            and len(content) >= 12
+            and content.startswith(b"RIFF")
+            and content[8:12] == b"WEBP"
+        )
+    )
+    if not valid_signature:
+        raise HTTPException(400, "Содержимое файла не соответствует формату изображения")
+
     bot = getattr(request.app.state, "bot", None)
     if bot is None:
         raise HTTPException(503, "Загрузка временно недоступна")
