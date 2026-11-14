@@ -647,14 +647,18 @@ async def submit_task(
                         proof_url = EXCLUDED.proof_url,
                         screenshot_file_id = EXCLUDED.screenshot_file_id,
                         status = 'pending',
-                        revision_count = 0,
+                        revision_count = CASE
+                            WHEN submissions.status = 'revision_requested'
+                            THEN submissions.revision_count
+                            ELSE 0
+                        END,
                         revision_deadline = NULL,
                         admin_reason = NULL,
                         reviewed_by = NULL,
                         reviewed_at = NULL,
                         created_at = NOW(),
                         updated_at = NOW()
-                    WHERE submissions.status IN ('expired', 'rejected', 'removed')
+                    WHERE submissions.status IN ('expired', 'rejected', 'removed', 'revision_requested')
                     RETURNING id
                     """,
                     slot_id, executor_id, proof_url, screenshot_id,
