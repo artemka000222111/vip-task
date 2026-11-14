@@ -199,10 +199,13 @@ async def broadcast_confirm_callback(callback: CallbackQuery):
         async with db_pool.acquire() as conn:
             users = await conn.fetch(
                 """
-                SELECT telegram_id
-                FROM users
-                WHERE is_blocked = FALSE
-                ORDER BY created_at ASC
+                SELECT u.telegram_id
+                FROM users u
+                LEFT JOIN notification_settings n
+                  ON n.telegram_id = u.telegram_id
+                WHERE u.is_blocked = FALSE
+                  AND COALESCE(n.system_notifications, TRUE) = TRUE
+                ORDER BY u.created_at ASC
                 """
             )
 
