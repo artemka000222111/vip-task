@@ -251,7 +251,7 @@ async def broadcast_confirm_callback(callback: CallbackQuery):
         )
 
 
-async def expiration_loop(pool):
+async def expiration_loop(pool, app):
     logger.info("Запущена автоматическая проверка сроков заданий")
 
     while True:
@@ -261,10 +261,7 @@ async def expiration_loop(pool):
                     expired_slots = await expire_overdue_slots(conn)
 
             if expired_slots:
-                await notify_expired_executors(
-                    app=type("AppRef", (), {"state": type("StateRef", (), {"bot": bot, "db_pool": pool})()})(),
-                    expired_slots=expired_slots,
-                )
+                await notify_expired_executors(app, expired_slots)
                 logger.info(
                     "Автоматически освобождено просроченных мест: %s",
                     len(expired_slots),
@@ -308,7 +305,7 @@ async def lifespan(app: FastAPI):
         await init_db(db_pool)
 
         expiration_task = asyncio.create_task(
-            expiration_loop(db_pool)
+            expiration_loop(db_pool, app)
         )
 
         logger.info("Запуск Telegram-бота...")
