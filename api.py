@@ -403,6 +403,12 @@ async def get_tasks(
                       SELECT 1 FROM task_bans b
                       WHERE b.task_id = t.id AND b.executor_id = $1
                   )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM task_slots own
+                      WHERE own.task_id = t.id
+                        AND own.executor_id = $1
+                        AND own.status IN ('taken', 'revision', 'pending_review')
+                  )
                 GROUP BY t.id
                 HAVING COUNT(s.id) FILTER (WHERE s.status = 'free') > 0
                 ORDER BY t.unit_price_kopecks DESC, t.created_at DESC
