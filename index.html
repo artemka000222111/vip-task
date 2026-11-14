@@ -868,6 +868,14 @@ document.getElementById("topupForm").addEventListener("submit", async event => {
   }
 });
 
+function calculateWithdrawalPreview(amount) {
+  const amountKopecks = Math.round(amount * 100);
+  const feeKopecks = Math.floor(amountKopecks * 10 / 100);
+  return {
+    fee:feeKopecks / 100,
+    payout:(amountKopecks - feeKopecks) / 100
+  };
+}
 function updateWithdrawalPreview() {
   const amount = Number(document.getElementById("withdrawAmount").value);
 
@@ -877,11 +885,10 @@ function updateWithdrawalPreview() {
     return;
   }
 
-  const fee = amount * 0.10;
-  const payout = amount - fee;
+  const amounts = calculateWithdrawalPreview(amount);
 
-  document.getElementById("withdrawFee").textContent = money(fee);
-  document.getElementById("withdrawPayout").textContent = money(payout);
+  document.getElementById("withdrawFee").textContent = money(amounts.fee);
+  document.getElementById("withdrawPayout").textContent = money(amounts.payout);
 }
 
 document.getElementById("withdrawAmount")
@@ -904,8 +911,8 @@ document.getElementById("withdrawForm").addEventListener("submit", async event =
 
   if (!confirm(
     `Создать заявку на вывод ${money(amount)}?\n` +
-    `Комиссия: ${money(amount * 0.10)}\n` +
-    `К выплате: ${money(amount * 0.90)}`
+    `Комиссия: ${money(calculateWithdrawalPreview(amount).fee)}\n` +
+    `К выплате: ${money(calculateWithdrawalPreview(amount).payout)}`
   )) return;
 
   button.disabled = true;
