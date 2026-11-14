@@ -47,7 +47,7 @@ class DatabaseIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
             table_names = {row["table_name"] for row in tables}
             expected = {
-                "users", "wallets", "ledger", "platform_revenue",
+                "users", "wallets", "ledger", "platform_revenue", "uploaded_media",
                 "tasks", "task_slots", "task_slot_assignments",
                 "submissions", "task_bans", "topup_requests",
                 "withdrawal_requests", "sbp_settings",
@@ -65,6 +65,8 @@ class DatabaseIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
             column_map = {(row["table_name"], row["column_name"]) for row in columns}
             for required in (
+                ("uploaded_media", "file_id"),
+                ("uploaded_media", "telegram_id"),
                 ("tasks", "initial_total_kopecks"),
                 ("tasks", "penalty_kopecks"),
                 ("task_slots", "slot_number"),
