@@ -532,6 +532,12 @@ async def submit_task(
     async with pool.acquire() as conn:
         async with conn.transaction():
 
+            media_owner = await conn.fetchval(
+                "SELECT telegram_id FROM uploaded_media WHERE file_id = $1",
+                screenshot_id,
+            )
+            if media_owner != executor_id:
+                raise HTTPException(400, "Этот скриншот не загружен с твоего аккаунта")
 
             task_guard = await conn.fetchrow(
                 "SELECT id, status FROM tasks WHERE id = $1 FOR UPDATE",
