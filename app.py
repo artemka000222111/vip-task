@@ -35,7 +35,6 @@ logging.basicConfig(
 
 logger = logging.getLogger("vip-task")
 
-# Главный администратор VIP TASK
 ADMIN_IDS = {5540327696}
 
 bot = None
@@ -305,6 +304,9 @@ async def lifespan(app: FastAPI):
 
         bot = Bot(token=token)
 
+        # Передаём бота модулю уведомлений
+        app.state.bot = bot
+
         await bot.delete_webhook(drop_pending_updates=True)
 
         polling_task = asyncio.create_task(
@@ -333,10 +335,12 @@ async def lifespan(app: FastAPI):
         polling_task = None
 
         if bot:
+            app.state.bot = None
             await bot.session.close()
             bot = None
 
         if db_pool:
+            app.state.db_pool = None
             await db_pool.close()
             db_pool = None
 
