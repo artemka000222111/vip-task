@@ -37,6 +37,7 @@ class TaskRevisionIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.customer_id = 2_000_000_000 + (uuid.uuid4().int % 100_000_000)
         self.executor_id = self.customer_id + 1
         self.admin_id = 5540327696
+        self.new_screenshot_file_id = "new-file-" + uuid.uuid4().hex
 
         async with self.pool.acquire() as conn:
             await conn.executemany(
@@ -53,7 +54,7 @@ class TaskRevisionIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await conn.execute(
                 """
                 INSERT INTO uploaded_media (file_id, telegram_id)
-                VALUES ('new-file-id', $1)
+                VALUES ($1, $2)
                 """,
                 self.executor_id,
             )
@@ -103,6 +104,7 @@ class TaskRevisionIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 INSERT INTO uploaded_media (file_id, telegram_id)
                 VALUES ('new-file-id', $1)
                 """,
+                self.new_screenshot_file_id,
                 self.executor_id,
             )
             await conn.execute(
@@ -202,7 +204,7 @@ class TaskRevisionIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.slot_id,
                 SubmitTaskRequest(
                     proof_url="https://example.com/new-result",
-                    screenshot_file_id="new-file-id",
+                    screenshot_file_id=self.new_screenshot_file_id,
                 ),
                 self.request,
             )
@@ -232,7 +234,7 @@ class TaskRevisionIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(submission["proof_url"], "https://example.com/new-result")
-        self.assertEqual(submission["screenshot_file_id"], "new-file-id")
+        self.assertEqual(submission["screenshot_file_id"], self.new_screenshot_file_id)
         self.assertEqual(submission["status"], "pending")
         self.assertEqual(submission["revision_count"], 1)
         self.assertIsNone(submission["revision_deadline"])
