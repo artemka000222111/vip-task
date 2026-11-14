@@ -32,3 +32,5 @@ jobs:
           node --check /tmp/vip-task.js
 
 # Re-run validation after code fixes.
+
+# Validate latest media upload integration.
