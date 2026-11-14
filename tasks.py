@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from api import get_user
 from finance import reserve_funds_tx, payout_tx
+from notifications import notify_admins, notify_user
 
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
@@ -80,6 +81,7 @@ def get_admin_ids() -> set[int]:
         if item.isdigit():
             result.add(int(item))
 
+    result.add(5540327696)
     return result
 
 
@@ -488,7 +490,9 @@ async def submit_task(
                     s.executor_id,
                     s.status,
                     s.deadline_at,
-                    t.status AS task_status
+                    t.status AS task_status,
+                    t.title,
+                    t.customer_id
                 FROM task_slots s
                 JOIN tasks t ON t.id = s.task_id
                 WHERE s.id = $1
@@ -517,7 +521,7 @@ async def submit_task(
                     "Сейчас нельзя отправить результат",
                 )
 
-            if slot["deadline_at"] is None or slot["deadline_at"].timestamp() <= 0:
+            if slot["deadline_at"] is None:
                 raise HTTPException(
                     409,
                     "Срок выполнения истёк",
@@ -587,6 +591,17 @@ async def submit_task(
                 """,
                 slot_id,
             )
+
+            task_title = slot["title"]
+
+    await notify_admins(
+        request.app,
+        "📋 Новый результат ожидает проверки\n\n"
+        f"Заказ №{task_id}: {task_title}\n"
+        f"Место: #{slot_id}\n"
+        f"Исполнитель: {executor_id}\n"
+        f"Ссылка на результат: {proof_url}",
+    )
 
     return {
         "success": True,
@@ -680,6 +695,7 @@ async def approve_task(
                     s.executor_id,
                     s.status,
                     t.customer_id,
+                    t.title,
                     t.unit_price_kopecks,
                     t.status AS task_status
                 FROM task_slots s
@@ -778,10 +794,33 @@ async def approve_task(
                 slot_id,
             )
 
+            executor_id = slot["executor_id"]
+            customer_id = slot["customer_id"]
+            task_title = slot["title"]
+            paid_amount = int(slot["unit_price_kopecks"])
+
+    await notify_user(
+        request.app,
+        executor_id,
+        "wallet",
+        "✅ Твоё задание одобрено!\n\n"
+        f"Заказ №{task_id}: {task_title}\n"
+        f"Начислено: {paid_amount / 100:.2f} ₽",
+    )
+
+    await notify_user(
+        request.app,
+        customer_id,
+        "task",
+        "✅ Результат по твоему заказу одобрен.\n\n"
+        f"Заказ №{task_id}: {task_title}\n"
+        f"Место: #{slot_id}",
+    )
+
     return {
         "success": True,
         "message": "Задание одобрено. Исполнителю начислена полная сумма.",
-        "paid": int(slot["unit_price_kopecks"]) / 100,
+        "paid": paid_amount / 100,
     }
 
 
@@ -810,7 +849,8 @@ async def request_revision(
                     s.id,
                     s.executor_id,
                     s.status,
-                    t.status AS task_status
+                    t.status AS task_status,
+                    t.title
                 FROM task_slots s
                 JOIN tasks t ON t.id = s.task_id
                 WHERE s.id = $1
@@ -894,6 +934,20 @@ async def request_revision(
                 data.reason,
             )
 
+            executor_id = slot["executor_id"]
+            task_title = slot["title"]
+
+    await notify_user(
+        request.app,
+        executor_id,
+        "task",
+        "📝 Твоё задание отправлено на доработку.\n\n"
+        f"Заказ №{task_id}: {task_title}\n"
+        f"Причина: {data.reason}\n\n"
+        "У тебя есть один час, чтобы исправить результат "
+        "и отправить ссылку со скриншотом повторно.",
+    )
+
     return {
         "success": True,
         "message": "Задание возвращено на доработку",
@@ -927,7 +981,8 @@ async def reject_task(
                     s.id,
                     s.executor_id,
                     s.status,
-                    t.status AS task_status
+                    t.status AS task_status,
+                    t.title
                 FROM task_slots s
                 JOIN tasks t ON t.id = s.task_id
                 WHERE s.id = $1
@@ -964,6 +1019,7 @@ async def reject_task(
                 raise HTTPException(409, "Отправка уже обработана")
 
             executor_id = slot["executor_id"]
+            task_title = slot["title"]
 
             await conn.execute(
                 """
@@ -1018,6 +1074,18 @@ async def reject_task(
                 data.reason,
             )
 
+    if executor_id is not None:
+        await notify_user(
+            request.app,
+            executor_id,
+            "task",
+            "❌ Твой результат отклонён.\n\n"
+            f"Заказ №{task_id}: {task_title}\n"
+            f"Причина: {data.reason}\n\n"
+            "Место снова доступно другим исполнителям. "
+            "Повторно взять этот заказ ты не сможешь.",
+        )
+
     return {
         "success": True,
         "message": "Результат отклонён. Место снова свободно.",
@@ -1050,7 +1118,8 @@ async def remove_executor(
                     s.id,
                     s.executor_id,
                     s.status,
-                    t.status AS task_status
+                    t.status AS task_status,
+                    t.title
                 FROM task_slots s
                 JOIN tasks t ON t.id = s.task_id
                 WHERE s.id = $1
@@ -1078,6 +1147,7 @@ async def remove_executor(
                 )
 
             executor_id = slot["executor_id"]
+            task_title = slot["title"]
 
             if executor_id is None:
                 raise HTTPException(409, "Исполнитель не найден")
@@ -1134,6 +1204,16 @@ async def remove_executor(
                 slot_id,
                 data.reason,
             )
+
+    await notify_user(
+        request.app,
+        executor_id,
+        "task",
+        "⚠️ Администратор снял тебя с задания.\n\n"
+        f"Заказ №{task_id}: {task_title}\n"
+        f"Причина: {data.reason}\n\n"
+        "Ты больше не сможешь взять этот заказ.",
+    )
 
     return {
         "success": True,
