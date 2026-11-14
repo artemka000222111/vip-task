@@ -1200,6 +1200,7 @@ async function submitWork(taskId, slotId) {
 
     notify("Результат отправлен на проверку.");
     await loadMyWork("active");
+    await loadTasks("review", document.querySelector("#tasks .tabs button:nth-child(3)"));
   } catch (error) {
     notify(error.message);
   }
