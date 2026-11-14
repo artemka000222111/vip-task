@@ -93,10 +93,16 @@ SCHEMA = [
         slot_id BIGINT NOT NULL REFERENCES task_slots(id),
         executor_id BIGINT NOT NULL REFERENCES users(telegram_id),
         assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        deadline_at TIMESTAMPTZ,
         ended_at TIMESTAMPTZ,
         outcome TEXT,
         reason TEXT
     )
+    """,
+
+    """
+    ALTER TABLE task_slot_assignments
+    ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMPTZ
     """,
 
     """
@@ -110,8 +116,8 @@ SCHEMA = [
     WHERE ended_at IS NULL
     """,
     """
-    INSERT INTO task_slot_assignments (task_id, slot_id, executor_id)
-    SELECT s.task_id, s.id, s.executor_id
+    INSERT INTO task_slot_assignments (task_id, slot_id, executor_id, deadline_at)
+    SELECT s.task_id, s.id, s.executor_id, s.deadline_at
     FROM task_slots s
     WHERE s.executor_id IS NOT NULL
       AND s.status IN ('taken', 'revision', 'pending_review')
