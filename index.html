@@ -1111,6 +1111,7 @@ async function loadMyTasks() {
         <div class="row"><span>В работе</span><b>${task.taken_slots}</b></div>
         <div class="row"><span>На проверке</span><b>${task.pending_review_slots}</b></div>
         <div class="row"><span>Одобрено</span><b>${task.approved_slots}</b></div>
+        <div class="row"><span>Общий прогресс</span><b>${task.total_slots ? Math.round(task.approved_slots / task.total_slots * 100) : 0}%</b></div>
         <div class="row"><span>В резерве</span><b>${money(task.reserved_balance)}</b></div>
       </div>
     `).join("") : '<div class="empty">Ты ещё не создавал заказы.</div>';
