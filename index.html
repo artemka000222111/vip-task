@@ -1168,7 +1168,7 @@ async function loadMyWork(tab = "active", button) {
         <div class="row"><span>Статус</span><b>${escapeHTML(workStatusText(item.status))}</b></div>
         <div class="row">
           <span>Срок</span>
-          <b>${item.deadline_at ? new Date(item.deadline_at).toLocaleString("ru-RU") : "—"}</b>
+          <b>${(item.status === "taken" || item.status === "revision") && item.deadline_at ? new Date(item.deadline_at).toLocaleString("ru-RU") : "—"}</b>
         </div>
         ${(item.assignment_reason || item.admin_reason) ? `<div class="notice">Комментарий: ${escapeHTML(item.assignment_reason || item.admin_reason)}</div>` : ""}
         ${item.status === "taken" || item.status === "revision" ? `
