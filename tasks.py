@@ -216,7 +216,7 @@ async def notify_expired_executors(app, expired_slots):
             app,
             item["executor_id"],
             "task",
-            "⌛ Время выполнения задания истекло.\\n\\n"
+            "⌛ Время выполнения задания истекло.\n\n"
             f"Заказ №{item['task_id']}: {item['title']}\\n"
             "Место освобождено, повторно взять этот заказ ты не сможешь.",
         )
@@ -1035,17 +1035,17 @@ async def delist_task(task_id: int, data: ReviewReasonRequest, request: Request)
 
     await notify_user(
         request.app, customer_id, "task",
-        "⛔ Твой заказ снят администратором.\\n\\n"
-        f"Заказ №{task_id}: {title}\\n"
-        f"Штраф: {penalty / 100:.2f} ₽\\n"
-        f"Возвращено: {refund / 100:.2f} ₽\\n"
+        "⛔ Твой заказ снят администратором.\n\n"
+        f"Заказ №{task_id}: {title}\n"
+        f"Штраф: {penalty / 100:.2f} ₽\n"
+        f"Возвращено: {refund / 100:.2f} ₽\n"
         f"Причина: {data.reason}",
     )
     for executor_id in executor_ids:
         await notify_user(
             request.app, executor_id, "task",
-            "⛔ Заказ, над которым ты работал, снят с публикации.\\n\\n"
-            f"Заказ №{task_id}: {title}\\nДальнейшее выполнение невозможно.",
+            "⛔ Заказ, над которым ты работал, снят с публикации.\n\n"
+            f"Заказ №{task_id}: {title}\nДальнейшее выполнение невозможно.",
         )
 
     return {"success": True, "status": "removed",
@@ -1294,17 +1294,6 @@ async def reject_task(
 
             await conn.execute(
                 """
-                UPDATE task_slot_assignments
-                SET ended_at = NOW(), outcome = 'removed', reason = $1
-                WHERE slot_id = $2 AND executor_id = $3 AND ended_at IS NULL
-                """,
-                data.reason,
-                slot_id,
-                executor_id,
-            )
-
-            await conn.execute(
-                """
                 UPDATE task_slots
                 SET status = 'free',
                     executor_id = NULL,
@@ -1432,6 +1421,17 @@ async def remove_executor(
                 data.reason,
                 admin_id,
                 slot_id,
+            )
+
+            await conn.execute(
+                """
+                UPDATE task_slot_assignments
+                SET ended_at = NOW(), outcome = 'removed', reason = $1
+                WHERE slot_id = $2 AND executor_id = $3 AND ended_at IS NULL
+                """,
+                data.reason,
+                slot_id,
+                executor_id,
             )
 
             await conn.execute(
