@@ -526,6 +526,7 @@ async def submit_task(
                     s.executor_id,
                     s.status,
                     s.deadline_at,
+                    (s.deadline_at > NOW()) AS deadline_valid,
                     t.status AS task_status,
                     t.title,
                     t.customer_id
@@ -561,6 +562,12 @@ async def submit_task(
                 raise HTTPException(
                     409,
                     "Срок выполнения истёк",
+                )
+
+            if not slot["deadline_valid"]:
+                raise HTTPException(
+                    409,
+                    "Время выполнения уже истекло. Дождись освобождения места.",
                 )
 
             revision = slot["status"] == "revision"
