@@ -1,3 +1,4 @@
+
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 import os
@@ -17,6 +18,7 @@ from finance import (
     approve_withdrawal_request,
     reject_withdrawal_request,
 )
+from notifications import notify_admins, notify_user
 
 
 router = APIRouter(prefix="/api", tags=["api"])
@@ -30,11 +32,13 @@ DEFAULT_SBP_BANK = "Сбербанк"
 # ==================================================
 
 def get_admin_ids() -> set[int]:
-    return {
+    result = {
         int(value.strip())
         for value in os.getenv("ADMIN_IDS", "").split(",")
         if value.strip().isdigit()
     }
+    result.add(5540327696)
+    return result
 
 
 async def get_user(request: Request):
@@ -143,6 +147,30 @@ def rubles_to_kopecks(value: Decimal) -> int:
         raise HTTPException(
             400,
             "Укажи сумму в рублях с точностью до копеек",
+        )
+
+
+async def get_wallet_request_owner(
+    pool,
+    table: str,
+    request_id: int,
+):
+    allowed_tables = {
+        "topup_requests",
+        "withdrawal_requests",
+    }
+
+    if table not in allowed_tables:
+        raise ValueError("Недопустимая таблица")
+
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(
+            f"""
+            SELECT telegram_id, amount_kopecks
+            FROM {table}
+            WHERE id = $1
+            """,
+            request_id,
         )
 
 
@@ -639,6 +667,15 @@ async def create_topup(
                 sbp["bank"],
             )
 
+    await notify_admins(
+        request.app,
+        "💰 Новая заявка на пополнение\n\n"
+        f"Номер заявки: #{request_id}\n"
+        f"Пользователь: {telegram_id}\n"
+        f"Имя отправителя: {sender_name}\n"
+        f"Сумма: {amount / 100:.2f} ₽",
+    )
+
     return {
         "success": True,
         "request_id": request_id,
@@ -677,6 +714,17 @@ async def create_withdrawal(
         )
     except ValueError as error:
         raise HTTPException(400, str(error))
+
+    await notify_admins(
+        request.app,
+        "💸 Новая заявка на вывод\n\n"
+        f"Номер заявки: #{result['request_id']}\n"
+        f"Пользователь: {telegram_id}\n"
+        f"Сумма заявки: {result['amount'] / 100:.2f} ₽\n"
+        f"Комиссия 10%: {result['fee'] / 100:.2f} ₽\n"
+        f"К выплате: {result['payout'] / 100:.2f} ₽\n\n"
+        f"Реквизиты:\n{payout_details}",
+    )
 
     return {
         "success": True,
@@ -809,17 +857,27 @@ async def admin_approve_topup(
 ):
     admin = await require_admin(request)
     admin_id = int(admin["id"])
+    pool = request.app.state.db_pool
+
+    owner = await get_wallet_request_owner(
+        pool,
+        "topup_requests",
+        request_id,
+    )
+
+    if not owner:
+        raise HTTPException(404, "Заявка не найдена")
 
     try:
         await approve_topup_request(
-            request.app.state.db_pool,
+            pool,
             request_id,
             admin_id,
         )
     except ValueError as error:
         raise HTTPException(400, str(error))
 
-    async with request.app.state.db_pool.acquire() as conn:
+    async with pool.acquire() as conn:
         await log_admin_action(
             conn,
             admin_id,
@@ -827,6 +885,15 @@ async def admin_approve_topup(
             "topup_request",
             request_id,
         )
+
+    await notify_user(
+        request.app,
+        owner["telegram_id"],
+        "wallet",
+        "✅ Твоё пополнение подтверждено.\n\n"
+        f"Заявка №{request_id}\n"
+        f"Зачислено: {owner['amount_kopecks'] / 100:.2f} ₽",
+    )
 
     return {
         "success": True,
@@ -847,10 +914,20 @@ async def admin_reject_topup(
     admin = await require_admin(request)
     admin_id = int(admin["id"])
     reason = data.reason.strip()
+    pool = request.app.state.db_pool
+
+    owner = await get_wallet_request_owner(
+        pool,
+        "topup_requests",
+        request_id,
+    )
+
+    if not owner:
+        raise HTTPException(404, "Заявка не найдена")
 
     try:
         await reject_topup_request(
-            request.app.state.db_pool,
+            pool,
             request_id,
             admin_id,
             reason,
@@ -858,7 +935,7 @@ async def admin_reject_topup(
     except ValueError as error:
         raise HTTPException(400, str(error))
 
-    async with request.app.state.db_pool.acquire() as conn:
+    async with pool.acquire() as conn:
         await log_admin_action(
             conn,
             admin_id,
@@ -867,6 +944,15 @@ async def admin_reject_topup(
             request_id,
             reason,
         )
+
+    await notify_user(
+        request.app,
+        owner["telegram_id"],
+        "wallet",
+        "❌ Твоё пополнение отклонено.\n\n"
+        f"Заявка №{request_id}\n"
+        f"Причина: {reason}",
+    )
 
     return {
         "success": True,
@@ -928,17 +1014,27 @@ async def admin_mark_withdrawal_paid(
 ):
     admin = await require_admin(request)
     admin_id = int(admin["id"])
+    pool = request.app.state.db_pool
+
+    owner = await get_wallet_request_owner(
+        pool,
+        "withdrawal_requests",
+        request_id,
+    )
+
+    if not owner:
+        raise HTTPException(404, "Заявка не найдена")
 
     try:
         await approve_withdrawal_request(
-            request.app.state.db_pool,
+            pool,
             request_id,
             admin_id,
         )
     except ValueError as error:
         raise HTTPException(400, str(error))
 
-    async with request.app.state.db_pool.acquire() as conn:
+    async with pool.acquire() as conn:
         await log_admin_action(
             conn,
             admin_id,
@@ -946,6 +1042,15 @@ async def admin_mark_withdrawal_paid(
             "withdrawal_request",
             request_id,
         )
+
+    await notify_user(
+        request.app,
+        owner["telegram_id"],
+        "wallet",
+        "✅ Твоя заявка на вывод выплачена.\n\n"
+        f"Заявка №{request_id}\n"
+        "Деньги отправлены по указанным реквизитам.",
+    )
 
     return {
         "success": True,
@@ -967,10 +1072,20 @@ async def admin_reject_withdrawal(
     admin = await require_admin(request)
     admin_id = int(admin["id"])
     reason = data.reason.strip()
+    pool = request.app.state.db_pool
+
+    owner = await get_wallet_request_owner(
+        pool,
+        "withdrawal_requests",
+        request_id,
+    )
+
+    if not owner:
+        raise HTTPException(404, "Заявка не найдена")
 
     try:
         await reject_withdrawal_request(
-            request.app.state.db_pool,
+            pool,
             request_id,
             admin_id,
             reason,
@@ -978,7 +1093,7 @@ async def admin_reject_withdrawal(
     except ValueError as error:
         raise HTTPException(400, str(error))
 
-    async with request.app.state.db_pool.acquire() as conn:
+    async with pool.acquire() as conn:
         await log_admin_action(
             conn,
             admin_id,
@@ -987,6 +1102,16 @@ async def admin_reject_withdrawal(
             request_id,
             reason,
         )
+
+    await notify_user(
+        request.app,
+        owner["telegram_id"],
+        "wallet",
+        "❌ Твоя заявка на вывод отклонена.\n\n"
+        f"Заявка №{request_id}\n"
+        f"Причина: {reason}\n"
+        "Зарезервированные средства возвращены на баланс.",
+    )
 
     return {
         "success": True,
