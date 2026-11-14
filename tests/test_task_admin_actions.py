@@ -126,8 +126,8 @@ class RemoveExecutorIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(result["status"], "removed")
-        self.assertEqual(result["penalty"], 1000 / 100)
-        self.assertEqual(result["refund"], 9000 / 100)
+        self.assertEqual(result["penalty"], 100 / 100)
+        self.assertEqual(result["refund"], 900 / 100)
 
         async with self.pool.acquire() as conn:
             wallet = await conn.fetchrow(
@@ -148,7 +148,7 @@ class RemoveExecutorIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(wallet["available_kopecks"], 900)
-        self.assertEqual(wallet["reserved_kopecks"], 100)
+        self.assertEqual(wallet["reserved_kopecks"], 0)
         self.assertEqual(task["status"], "removed")
         self.assertEqual(task["reserved_kopecks"], 0)
         self.assertEqual(task["penalty_kopecks"], 100)
