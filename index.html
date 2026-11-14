@@ -1297,6 +1297,8 @@ async function loadAdminReviews() {
           <button class="btn secondary" onclick="reviewAction(${item.task_id},${item.slot_id},'revision')">На доработку</button>
           <div style="height:8px"></div>
           <button class="btn danger" onclick="reviewAction(${item.task_id},${item.slot_id},'reject')">Отклонить</button>
+          <div style="height:8px"></div>
+          <button class="btn secondary" onclick="reviewAction(${item.task_id},${item.slot_id},'remove-executor')">Снять исполнителя</button>
         </div>
       `;
     }));
