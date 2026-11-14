@@ -565,22 +565,35 @@ async def submit_task(
                 )
 
             else:
-                await conn.execute(
+                submission_id = await conn.fetchval(
                     """
                     INSERT INTO submissions (
-                        slot_id,
-                        executor_id,
-                        proof_url,
-                        screenshot_file_id,
-                        status
+                        slot_id, executor_id, proof_url,
+                        screenshot_file_id, status, revision_count,
+                        revision_deadline, admin_reason, reviewed_by,
+                        reviewed_at, created_at, updated_at
                     )
-                    VALUES ($1, $2, $3, $4, 'pending')
+                    VALUES ($1, $2, $3, $4, 'pending', 0, NULL, NULL, NULL, NULL, NOW(), NOW())
+                    ON CONFLICT (slot_id)
+                    DO UPDATE SET
+                        executor_id = EXCLUDED.executor_id,
+                        proof_url = EXCLUDED.proof_url,
+                        screenshot_file_id = EXCLUDED.screenshot_file_id,
+                        status = 'pending',
+                        revision_count = 0,
+                        revision_deadline = NULL,
+                        admin_reason = NULL,
+                        reviewed_by = NULL,
+                        reviewed_at = NULL,
+                        created_at = NOW(),
+                        updated_at = NOW()
+                    WHERE submissions.status IN ('expired', 'rejected', 'removed')
+                    RETURNING id
                     """,
-                    slot_id,
-                    executor_id,
-                    proof_url,
-                    screenshot_id,
+                    slot_id, executor_id, proof_url, screenshot_id,
                 )
+                if submission_id is None:
+                    raise HTTPException(409, "Для этого места уже существует активная отправка")
 
             await conn.execute(
                 """
