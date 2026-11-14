@@ -85,6 +85,10 @@ class DatabaseMigrationIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 executor_id,
             )
 
+        # Симулируем старую схему, в которой ещё нет completed_at.
+        async with self.pool.acquire() as conn:
+            await conn.execute("ALTER TABLE task_slots DROP COLUMN completed_at")
+
         # Повторный запуск должен быть безопасным и заполнить новые данные
         # для записей, созданных до появления соответствующих миграций.
         await init_db(self.pool)
