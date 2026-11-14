@@ -17,8 +17,15 @@ def verify_telegram_init_data(init_data: str) -> dict:
         raise ValueError("Отсутствуют данные Telegram")
 
     try:
-        parsed = dict(parse_qsl(init_data, keep_blank_values=True))
-    except Exception:
+        pairs = parse_qsl(
+            init_data,
+            keep_blank_values=True,
+            strict_parsing=True,
+        )
+        parsed = dict(pairs)
+        if len(parsed) != len(pairs):
+            raise ValueError("Дублирующиеся параметры")
+    except (TypeError, ValueError):
         raise ValueError("Некорректные данные Telegram")
 
     received_hash = parsed.pop("hash", None)
