@@ -243,6 +243,20 @@ class ReviewReasonRequest(BaseModel):
 # СОЗДАНИЕ ЗАКАЗА
 # ==========================================
 
+@router.get("/prices")
+async def get_task_prices(request: Request):
+    await get_user(request)
+    prices = {}
+
+    for action in ACTION_PRICE_ENV:
+        try:
+            prices[action] = get_action_price(action) / 100
+        except HTTPException:
+            prices[action] = None
+
+    return {"prices": prices}
+
+
 @router.post("/create")
 async def create_task(data: CreateTaskRequest, request: Request):
     user = await get_user(request)
