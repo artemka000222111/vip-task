@@ -623,6 +623,10 @@ async def submit_task(
                     SET proof_url = $1,
                         screenshot_file_id = $2,
                         status = 'pending',
+                        revision_deadline = NULL,
+                        reviewed_by = NULL,
+                        reviewed_at = NULL,
+                        created_at = NOW(),
                         updated_at = NOW()
                     WHERE slot_id = $3
                     """,
