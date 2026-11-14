@@ -1392,7 +1392,7 @@ async def get_admin_assignments(
             FROM task_slot_assignments a
             JOIN users u ON u.telegram_id = a.executor_id
             JOIN tasks t ON t.id = a.task_id
-            ORDER BY a.assigned_at DESC
+            ORDER BY (a.ended_at IS NULL) DESC, a.assigned_at DESC
             LIMIT $1
             """,
             limit,
