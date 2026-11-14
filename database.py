@@ -103,6 +103,12 @@ SCHEMA = [
     CREATE INDEX IF NOT EXISTS idx_slot_assignments_executor
     ON task_slot_assignments(executor_id, assigned_at DESC)
     """,
+
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_slot_assignments_one_active_per_slot
+    ON task_slot_assignments(slot_id)
+    WHERE ended_at IS NULL
+    """,
     """
     INSERT INTO task_slot_assignments (task_id, slot_id, executor_id)
     SELECT s.task_id, s.id, s.executor_id
