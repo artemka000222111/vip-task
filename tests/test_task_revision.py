@@ -115,6 +115,11 @@ class TaskRevisionIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.executor_id,
                 self.admin_id,
             )
+            await conn.execute(
+                "INSERT INTO uploaded_media (file_id, telegram_id) VALUES ($1, $2)",
+                "new-file-id",
+                self.executor_id,
+            )
 
         self.app = SimpleNamespace(state=SimpleNamespace(db_pool=self.pool, bot=None))
         self.request = Request({
