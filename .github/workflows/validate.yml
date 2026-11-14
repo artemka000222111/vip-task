@@ -4,10 +4,29 @@ on:
   push:
     branches:
       - vip-task-work
+  pull_request:
+    branches:
+      - main
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: viptask
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d viptask"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/viptask
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -20,7 +39,7 @@ jobs:
         run: pip install -r requirements.txt
       - name: Compile Python
         run: python -m compileall -q .
-      - name: Run unit tests
+      - name: Run unit and PostgreSQL integration tests
         run: python -m unittest discover -s tests -v
       - name: Check Mini App JavaScript syntax
         run: |
@@ -32,7 +51,3 @@ jobs:
           Path("/tmp/vip-task.js").write_text("\n".join(scripts), encoding="utf-8")
           PY
           node --check /tmp/vip-task.js
-
-# Re-run validation after code fixes.
-
-# Validate latest media upload integration.
