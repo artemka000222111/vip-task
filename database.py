@@ -116,15 +116,28 @@ SCHEMA = [
     WHERE ended_at IS NULL
     """,
     """
-    INSERT INTO task_slot_assignments (task_id, slot_id, executor_id, deadline_at)
-    SELECT s.task_id, s.id, s.executor_id, s.deadline_at
+    INSERT INTO task_slot_assignments (
+        task_id, slot_id, executor_id, assigned_at,
+        deadline_at, ended_at, outcome
+    )
+    SELECT
+        s.task_id,
+        s.id,
+        s.executor_id,
+        COALESCE(s.taken_at, s.created_at),
+        s.deadline_at,
+        CASE
+            WHEN s.status = 'approved'
+            THEN COALESCE(s.completed_at, s.created_at, NOW())
+            ELSE NULL
+        END,
+        CASE WHEN s.status = 'approved' THEN 'approved' ELSE NULL END
     FROM task_slots s
     WHERE s.executor_id IS NOT NULL
-      AND s.status IN ('taken', 'revision', 'pending_review')
+      AND s.status IN ('taken', 'revision', 'pending_review', 'approved')
       AND NOT EXISTS (
           SELECT 1 FROM task_slot_assignments a
           WHERE a.slot_id = s.id AND a.executor_id = s.executor_id
-            AND a.ended_at IS NULL
       )
     """,
 
