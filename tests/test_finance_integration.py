@@ -1,5 +1,6 @@
 import os
 import unittest
+import uuid
 
 import asyncpg
 
@@ -17,6 +18,7 @@ class FinanceIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.pool = await asyncpg.create_pool(os.environ["DATABASE_URL"])
         await init_db(self.pool)
+        self.base_user_id = 1000000000 + (uuid.uuid4().int % 1000000000)
 
     async def asyncTearDown(self):
         await self.pool.close()
@@ -44,7 +46,7 @@ class FinanceIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 )
 
     async def test_withdrawal_approval_records_fee_once(self):
-        user_id = 900000011
+        user_id = self.base_user_id + 1
         await self._user(user_id, available=5000)
 
         request = await create_withdrawal_request(
@@ -81,7 +83,7 @@ class FinanceIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status, "paid")
 
     async def test_withdrawal_rejection_refunds_full_amount_without_fee(self):
-        user_id = 900000012
+        user_id = self.base_user_id + 2
         await self._user(user_id, available=5000)
 
         request = await create_withdrawal_request(
@@ -109,24 +111,22 @@ class FinanceIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(revenue, 0)
 
     async def test_task_payout_moves_full_amount_once(self):
-        customer_id = 900000013
-        executor_id = 900000014
+        customer_id = self.base_user_id + 3
+        executor_id = self.base_user_id + 4
         await self._user(customer_id, reserved=3000)
         await self._user(executor_id)
 
+        key = f"finance-integration:{uuid.uuid4().hex}"
         async with self.pool.acquire() as conn:
             async with conn.transaction():
-                await payout_tx(
-                    conn, customer_id, executor_id, 1200,
-                    "integration:task:slot:1", None,
-                )
+                await payout_tx(conn, customer_id, executor_id, 1200, key, None)
 
         with self.assertRaises(ValueError):
             async with self.pool.acquire() as conn:
                 async with conn.transaction():
                     await payout_tx(
                         conn, customer_id, executor_id, 1200,
-                        "integration:task:slot:1", None,
+                        key, None,
                     )
 
         async with self.pool.acquire() as conn:
