@@ -432,6 +432,13 @@ label {font-size:13px;color:var(--muted)}
       <div class="success">Администратор</div>
       <p class="small">Доступ подтверждён сервером.</p>
 
+      <div class="section-title">Снятие заказа</div>
+      <label>Номер заказа</label>
+      <input id="delistTaskId" type="number" min="1" placeholder="ID заказа">
+      <label>Причина снятия</label>
+      <input id="delistTaskReason" maxlength="1000" placeholder="Укажи причину">
+      <button class="btn danger" onclick="adminDelistTask()">Снять заказ</button>
+      <div class="line"></div>
       <div class="section-title">Проверка заданий</div>
       <button class="btn secondary" onclick="loadAdminReviews()">Обновить проверки</button>
       <div id="adminReviews"></div>
@@ -1139,6 +1146,20 @@ async function loadAdminReviews() {
   }
 }
 
+async function adminDelistTask() {
+  const taskId = Number(document.getElementById("delistTaskId").value);
+  const reason = document.getElementById("delistTaskReason").value.trim();
+  if (!Number.isInteger(taskId) || taskId <= 0 || reason.length < 3) { notify("Укажи номер заказа и причину."); return; }
+  if (!confirm("Снять заказ? Штраф составит 10% от первоначальной стоимости, остаток резерва вернётся заказчику.")) return;
+  try {
+    const result = await api("/api/orders/" + taskId + "/delist", {method:"POST", body:JSON.stringify({reason})});
+    notify("Заказ снят. Штраф: " + money(result.penalty) + ". Возврат: " + money(result.refund) + ".");
+    document.getElementById("delistTaskId").value = "";
+    document.getElementById("delistTaskReason").value = "";
+    await loadAdminReviews();
+    await loadMyTasks();
+  } catch (error) { notify(error.message); }
+}
 async function reviewAction(taskId, slotId, action) {
   let reason = "";
 
