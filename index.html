@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -6,200 +5,196 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#080d19">
 <title>VIP TASK</title>
-
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
 <style>
 :root {
-  --bg: #080d19;
-  --card: #151f32;
-  --card2: #101827;
-  --green: #c6ff00;
-  --white: #f5f7fb;
-  --muted: #8994a8;
-  --border: #293850;
-  --red: #ff6262;
+  --bg:#080d19;
+  --card:#151f32;
+  --card2:#101827;
+  --green:#c6ff00;
+  --white:#f5f7fb;
+  --muted:#8994a8;
+  --border:#293850;
+  --red:#ff6262;
 }
-* { box-sizing: border-box; }
+* {box-sizing:border-box}
 body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--white);
-  font-family: Arial, sans-serif;
-  padding-bottom: 100px;
+  margin:0;
+  background:var(--bg);
+  color:var(--white);
+  font-family:Arial,sans-serif;
+  padding-bottom:100px;
 }
-button, input, textarea, select { font: inherit; }
-button { cursor: pointer; }
+button,input,textarea,select {font:inherit}
+button {cursor:pointer}
 header {
-  padding: 20px 18px 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  padding:20px 18px 12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
 }
-.logo { font-size: 24px; font-weight: 900; }
-.logo span { color: var(--green); }
+.logo {font-size:24px;font-weight:900}
+.logo span {color:var(--green)}
 .balance {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px 12px;
-  font-weight: bold;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:10px 12px;
+  font-weight:bold;
 }
-.balance span { color: var(--green); }
-main { padding: 12px 17px 25px; }
-.page { display: none; }
-.page.active { display: block; }
-h1 { font-size: 26px; margin: 8px 0; }
-h2 { font-size: 19px; }
-.subtitle { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.balance span {color:var(--green)}
+main {padding:12px 17px 25px}
+.page {display:none}
+.page.active {display:block}
+h1 {font-size:26px;margin:8px 0}
+h2 {font-size:19px}
+.subtitle {
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.5;
+}
 .hero {
-  margin: 20px 0;
-  padding: 22px;
-  border-radius: 20px;
-  background: linear-gradient(135deg,#1d2b42,#111a2b);
-  border: 1px solid var(--border);
+  margin:20px 0;
+  padding:22px;
+  border-radius:20px;
+  background:linear-gradient(135deg,#1d2b42,#111a2b);
+  border:1px solid var(--border);
 }
-.hero h2 { margin: 0 0 10px; font-size: 22px; }
-.hero p { color: var(--muted); font-size: 14px; line-height: 1.5; }
+.hero h2 {margin:0 0 10px;font-size:22px}
+.hero p {color:var(--muted);font-size:14px;line-height:1.5}
 .btn {
-  border: 0;
-  border-radius: 12px;
-  background: var(--green);
-  color: #101510;
-  padding: 13px 17px;
-  font-weight: 800;
-  font-size: 14px;
-  width: 100%;
+  border:0;
+  border-radius:12px;
+  background:var(--green);
+  color:#101510;
+  padding:13px 17px;
+  font-weight:800;
+  font-size:14px;
+  width:100%;
 }
-.btn.secondary {
-  background: #26344a;
-  color: var(--white);
-}
-.btn.danger {
-  background: #542b35;
-  color: #fff;
-}
-.btn:disabled { opacity: .5; cursor: not-allowed; }
-.task, .stat, .panel {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 16px;
-  margin: 12px 0;
+.btn.secondary {background:#26344a;color:var(--white)}
+.btn.danger {background:#542b35;color:#fff}
+.btn:disabled {opacity:.5;cursor:not-allowed}
+.task,.stat,.panel {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:16px;
+  margin:12px 0;
 }
 .task-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
 }
-.task h3 { margin: 0 0 9px; font-size: 16px; }
-.task p { color: var(--muted); font-size: 13px; line-height: 1.5; }
-.reward { color: var(--green); font-weight: 900; white-space: nowrap; }
+.task h3 {margin:0 0 9px;font-size:16px}
+.task p {color:var(--muted);font-size:13px;line-height:1.5}
+.reward {color:var(--green);font-weight:900;white-space:nowrap}
 .tag {
-  color: var(--muted);
-  font-size: 11px;
-  margin-bottom: 10px;
-  text-transform: uppercase;
+  color:var(--muted);
+  font-size:11px;
+  margin-bottom:10px;
+  text-transform:uppercase;
 }
-.section-title { font-size: 19px; margin: 25px 0 12px; }
+.section-title {font-size:19px;margin:25px 0 12px}
 nav {
-  position: fixed;
-  z-index: 10;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: #101827;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: space-around;
-  padding: 9px 2px calc(9px + env(safe-area-inset-bottom));
+  position:fixed;
+  z-index:10;
+  bottom:0;
+  left:0;
+  right:0;
+  background:#101827;
+  border-top:1px solid var(--border);
+  display:flex;
+  justify-content:space-around;
+  padding:9px 2px calc(9px + env(safe-area-inset-bottom));
 }
 nav button {
-  background: transparent;
-  color: var(--muted);
-  border: 0;
-  padding: 7px 3px;
-  font-size: 11px;
-  flex: 1;
+  background:transparent;
+  color:var(--muted);
+  border:0;
+  padding:7px 3px;
+  font-size:11px;
+  flex:1;
 }
-nav button.active { color: var(--green); }
-input, textarea, select {
-  width: 100%;
-  padding: 14px;
-  margin: 7px 0 15px;
-  border-radius: 11px;
-  border: 1px solid #34435b;
-  background: var(--card2);
-  color: white;
-  font-size: 15px;
+nav button.active {color:var(--green)}
+input,textarea,select {
+  width:100%;
+  padding:14px;
+  margin:7px 0 15px;
+  border-radius:11px;
+  border:1px solid #34435b;
+  background:var(--card2);
+  color:white;
+  font-size:15px;
 }
-label { font-size: 13px; color: var(--muted); }
-.stat strong { color: var(--green); font-size: 24px; }
+label {font-size:13px;color:var(--muted)}
+.stat strong {color:var(--green);font-size:24px}
 .tabs {
-  display: flex;
-  gap: 7px;
-  overflow-x: auto;
-  margin: 17px 0;
+  display:flex;
+  gap:7px;
+  overflow-x:auto;
+  margin:17px 0;
 }
 .tabs button {
-  white-space: nowrap;
-  background: var(--card);
-  color: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 12px;
+  white-space:nowrap;
+  background:var(--card);
+  color:var(--muted);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:10px 12px;
+  font-size:12px;
 }
 .tabs button.active {
-  background: var(--green);
-  color: #101510;
-  border-color: var(--green);
-  font-weight: bold;
+  background:var(--green);
+  color:#101510;
+  border-color:var(--green);
+  font-weight:bold;
 }
 .notice {
-  background: #17263a;
-  border: 1px solid var(--border);
-  padding: 13px;
-  border-radius: 12px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
-  margin: 12px 0;
+  background:#17263a;
+  border:1px solid var(--border);
+  padding:13px;
+  border-radius:12px;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.5;
+  margin:12px 0;
 }
 .empty {
-  text-align: center;
-  color: var(--muted);
-  padding: 30px 12px;
-  font-size: 14px;
+  text-align:center;
+  color:var(--muted);
+  padding:25px 12px;
+  font-size:14px;
 }
-.line {
-  height: 1px;
-  background: var(--border);
-  margin: 14px 0;
-}
+.line {height:1px;background:var(--border);margin:14px 0}
 .row {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 9px 0;
-  font-size: 13px;
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  margin:9px 0;
+  font-size:13px;
 }
-.row span:first-child { color: var(--muted); }
-.small { font-size: 12px; color: var(--muted); }
-.status { color: var(--green); font-size: 12px; font-weight: bold; }
-.error { color: var(--red); }
-.success { color: var(--green); }
-.loading { color: var(--muted); padding: 20px 0; text-align: center; }
+.row span:first-child {color:var(--muted)}
+.small {font-size:12px;color:var(--muted);line-height:1.5}
+.status {color:var(--green);font-size:12px;font-weight:bold}
+.error {color:var(--red)}
+.success {color:var(--green)}
+.loading {color:var(--muted);padding:20px 0;text-align:center}
 .checkrow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 15px 0;
-  color: var(--white);
-  font-size: 13px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:15px 0;
+  color:var(--white);
+  font-size:13px;
 }
-.checkrow input { width: auto; margin: 0; }
-.hidden { display: none !important; }
+.checkrow input {width:auto;margin:0}
+.hidden {display:none!important}
+.form-title {font-size:16px;font-weight:bold;margin-bottom:12px}
+.money-green {color:var(--green);font-weight:bold}
+.action-buttons {display:grid;gap:8px;margin-top:12px}
 </style>
 </head>
 
@@ -236,18 +231,14 @@ label { font-size: 13px; color: var(--muted); }
   <div id="homeTasks" class="loading">Загружаем задания...</div>
 </section>
 
-
 <section id="tasks" class="page">
   <h1>Задания</h1>
   <div class="subtitle">Выбирай подходящее задание</div>
-
   <div class="tabs">
     <button class="active" onclick="loadTasks(this)">Свободные</button>
   </div>
-
   <div id="allTasks" class="loading">Загружаем...</div>
 </section>
-
 
 <section id="create" class="page">
   <h1>Создать заказ</h1>
@@ -278,22 +269,24 @@ label { font-size: 13px; color: var(--muted); }
     </select>
 
     <label>Название</label>
-    <input id="taskTitle" maxlength="100" minlength="3" placeholder="Например: пройти опрос" required>
+    <input id="taskTitle" maxlength="100" minlength="3"
+      placeholder="Например: пройти опрос" required>
 
     <label>Описание задания</label>
-    <textarea id="taskDescription" rows="4" maxlength="2000" placeholder="Подробно опиши, что нужно сделать" required></textarea>
+    <textarea id="taskDescription" rows="4" maxlength="2000"
+      placeholder="Подробно опиши, что нужно сделать" required></textarea>
 
     <label>Ссылка на материал или сайт</label>
     <input id="taskUrl" type="url" placeholder="https://..." required>
 
     <label>Количество исполнителей</label>
-    <input id="taskQuantity" type="number" min="1" max="10000" value="1" required>
+    <input id="taskQuantity" type="number" min="1" max="10000"
+      value="1" required>
 
     <button class="btn" id="createButton" type="submit">Опубликовать заказ</button>
   </form>
   <div id="createMessage" class="small"></div>
 </section>
-
 
 <section id="wallet" class="page">
   <h1>Кошелёк</h1>
@@ -309,15 +302,89 @@ label { font-size: 13px; color: var(--muted); }
   </div>
 
   <div class="notice">
-    Минимальное пополнение — 10 ₽.
-    Минимальный вывод — 15 ₽.
-    При выводе удерживается комиссия платформы 10%.
+    Минимальное пополнение — 10 ₽.<br>
+    Минимальный вывод — 15 ₽.<br>
+    Комиссия при выводе — 10%.
   </div>
+
+  <div class="panel">
+    <div class="form-title">Пополнить баланс</div>
+
+    <div class="notice">
+      Переведи нужную сумму по реквизитам СБП ниже.
+      После перевода отправь заявку. Баланс будет зачислен после проверки администратором.
+    </div>
+
+    <div class="row">
+      <span>Телефон СБП</span>
+      <b id="sbpPhone">Загрузка...</b>
+    </div>
+    <div class="row">
+      <span>Банк</span>
+      <b id="sbpBank">Загрузка...</b>
+    </div>
+
+    <button class="btn secondary" onclick="copySbpPhone()">Скопировать телефон</button>
+
+    <div class="line"></div>
+
+    <form id="topupForm">
+      <label>Сумма пополнения, ₽</label>
+      <input id="topupAmount" type="number" min="10" step="0.01"
+        placeholder="Например, 100" required>
+
+      <label>Имя отправителя перевода</label>
+      <input id="topupSender" maxlength="100"
+        placeholder="Как указано в переводе" required>
+
+      <label>Telegram file_id подтверждения (необязательно)</label>
+      <input id="topupProof" maxlength="500"
+        placeholder="Можно оставить пустым">
+
+      <button class="btn" id="topupButton" type="submit">Отправить заявку</button>
+    </form>
+    <div id="topupMessage" class="small"></div>
+  </div>
+
+  <div class="panel">
+    <div class="form-title">Вывести деньги</div>
+
+    <div class="notice">
+      При создании заявки сумма будет зарезервирована.
+      После проверки администратор отправит выплату вручную.
+      Комиссия платформы — 10%.
+    </div>
+
+    <form id="withdrawForm">
+      <label>Сумма вывода, ₽</label>
+      <input id="withdrawAmount" type="number" min="15" step="0.01"
+        placeholder="Например, 100" required>
+
+      <div class="row">
+        <span>Комиссия</span>
+        <b id="withdrawFee">— ₽</b>
+      </div>
+      <div class="row">
+        <span>К выплате</span>
+        <b class="money-green" id="withdrawPayout">— ₽</b>
+      </div>
+
+      <label>Реквизиты для получения выплаты</label>
+      <textarea id="withdrawDetails" rows="3" maxlength="1000"
+        placeholder="Укажи реквизиты, по которым нужно отправить выплату"
+        required></textarea>
+
+      <button class="btn" id="withdrawButton" type="submit">Создать заявку на вывод</button>
+    </form>
+    <div id="withdrawMessage" class="small"></div>
+  </div>
+
+  <div class="section-title">Мои заявки</div>
+  <div id="walletRequests" class="loading">Загружаем заявки...</div>
 
   <div class="section-title">История операций</div>
   <div id="walletHistory" class="loading">Загружаем историю...</div>
 </section>
-
 
 <section id="profile" class="page">
   <h1>Профиль</h1>
@@ -360,15 +427,49 @@ label { font-size: 13px; color: var(--muted); }
 
   <div id="adminArea" class="hidden">
     <div class="section-title">Панель администратора</div>
+
     <div class="panel">
       <div class="success">Администратор</div>
       <p class="small">Доступ подтверждён сервером.</p>
-      <button class="btn secondary" onclick="loadAdminReviews()">Задания на проверку</button>
+
+      <div class="section-title">Проверка заданий</div>
+      <button class="btn secondary" onclick="loadAdminReviews()">Обновить проверки</button>
       <div id="adminReviews"></div>
+    </div>
+
+    <div class="panel">
+      <div class="section-title">Пополнения</div>
+      <button class="btn secondary" onclick="loadAdminTopups()">Обновить заявки</button>
+      <div id="adminTopups"></div>
+    </div>
+
+    <div class="panel">
+      <div class="section-title">Выводы средств</div>
+      <button class="btn secondary" onclick="loadAdminWithdrawals()">Обновить заявки</button>
+      <div id="adminWithdrawals"></div>
+    </div>
+
+    <div class="panel">
+      <div class="section-title">Настройки СБП</div>
+      <form id="sbpForm">
+        <label>Телефон СБП</label>
+        <input id="adminSbpPhone" maxlength="40" required>
+
+        <label>Банк</label>
+        <input id="adminSbpBank" maxlength="100" required>
+
+        <button class="btn" type="submit">Сохранить реквизиты</button>
+      </form>
+      <div id="sbpMessage" class="small"></div>
+    </div>
+
+    <div class="panel">
+      <div class="section-title">Журнал действий</div>
+      <button class="btn secondary" onclick="loadAdminActions()">Обновить журнал</button>
+      <div id="adminActions"></div>
     </div>
   </div>
 </section>
-
 
 <section id="myTasksPage" class="page">
   <h1>Мои заказы</h1>
@@ -379,7 +480,6 @@ label { font-size: 13px; color: var(--muted); }
 
 </main>
 
-
 <nav>
   <button class="active" onclick="showPage('home',this)">Главная</button>
   <button onclick="showPage('tasks',this)">Задания</button>
@@ -387,7 +487,6 @@ label { font-size: 13px; color: var(--muted); }
   <button onclick="showPage('wallet',this)">Кошелёк</button>
   <button onclick="showPage('profile',this)">Профиль</button>
 </nav>
-
 
 <script>
 const tg = window.Telegram?.WebApp;
@@ -407,6 +506,7 @@ const headers = {
 
 let profile = null;
 let currentTasks = [];
+let currentSbpPhone = "";
 
 function money(value) {
   return Number(value || 0).toLocaleString("ru-RU", {
@@ -417,11 +517,11 @@ function money(value) {
 
 function escapeHTML(value) {
   return String(value ?? "").replace(/[&<>"']/g, c => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
+    "&":"&amp;",
+    "<":"&lt;",
+    ">":"&gt;",
+    '"':"&quot;",
+    "'":"&#39;"
   }[c]));
 }
 
@@ -431,9 +531,7 @@ function notify(message) {
 }
 
 async function api(path, options = {}) {
-  if (!initData) {
-    throw new Error("Открой VIP TASK через Telegram.");
-  }
+  if (!initData) throw new Error("Открой VIP TASK через Telegram.");
 
   const response = await fetch(path, {
     ...options,
@@ -466,7 +564,7 @@ function showPage(id, button) {
   if (button) {
     button.classList.add("active");
   } else {
-    const index = ["home", "tasks", "create", "wallet", "profile"].indexOf(id);
+    const index = ["home","tasks","create","wallet","profile"].indexOf(id);
     if (index >= 0) document.querySelectorAll("nav button")[index].classList.add("active");
   }
 
@@ -495,9 +593,9 @@ async function loadProfile() {
       data.username ? "@" + data.username : "Имя пользователя не указано";
 
     document.getElementById("profileId").textContent = "ID: " + data.telegram_id;
-    document.getElementById("createdCount").textContent = data.created_tasks;
-    document.getElementById("approvedCount").textContent = data.approved_tasks;
-    document.getElementById("activeCount").textContent = data.active_tasks;
+    document.getElementById("createdCount").textContent = data.created_tasks ?? 0;
+    document.getElementById("approvedCount").textContent = data.approved_tasks ?? 0;
+    document.getElementById("activeCount").textContent = data.active_tasks ?? 0;
   } catch (error) {
     console.error(error);
     if (!initData) {
@@ -515,20 +613,14 @@ function taskCard(task) {
         <div class="reward">+${money(task.price)}</div>
       </div>
       <p>${escapeHTML(task.description)}</p>
-      <div class="row">
-        <span>Свободно мест</span>
-        <b>${task.available_slots}</b>
-      </div>
-      <div class="row">
-        <span>Всего мест</span>
-        <b>${task.total_slots}</b>
-      </div>
+      <div class="row"><span>Свободно мест</span><b>${task.available_slots}</b></div>
+      <div class="row"><span>Всего мест</span><b>${task.total_slots}</b></div>
       <button class="btn" onclick="takeTask(${task.id})">Выполнить</button>
     </div>
   `;
 }
 
-async function loadTasks(button) {
+async function loadTasks() {
   const container = document.getElementById("allTasks");
   container.innerHTML = '<div class="loading">Загружаем задания...</div>';
 
@@ -542,7 +634,7 @@ async function loadTasks(button) {
 
     document.getElementById("homeTasks").innerHTML =
       currentTasks.length
-        ? currentTasks.slice(0, 2).map(taskCard).join("")
+        ? currentTasks.slice(0,2).map(taskCard).join("")
         : '<div class="empty">Новых заданий пока нет.</div>';
   } catch (error) {
     container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
@@ -556,18 +648,19 @@ async function takeTask(id) {
 
   try {
     const data = await api(`/api/orders/${id}/take`, {
-      method: "POST",
-      body: JSON.stringify({})
+      method:"POST",
+      body:JSON.stringify({})
     });
 
     notify("Задание принято! Выполни его до " +
       new Date(data.deadline).toLocaleTimeString("ru-RU", {
-        hour: "2-digit",
-        minute: "2-digit"
+        hour:"2-digit",
+        minute:"2-digit"
       }));
 
     await loadTasks();
     await loadProfile();
+    await loadMyWork("active");
   } catch (error) {
     notify(error.message);
   }
@@ -580,12 +673,12 @@ document.getElementById("createForm").addEventListener("submit", async event => 
   const message = document.getElementById("createMessage");
 
   const payload = {
-    action: document.getElementById("taskAction").value,
-    platform: document.getElementById("taskPlatform").value,
-    title: document.getElementById("taskTitle").value.trim(),
-    description: document.getElementById("taskDescription").value.trim(),
-    target_url: document.getElementById("taskUrl").value.trim(),
-    quantity: Number(document.getElementById("taskQuantity").value)
+    action:document.getElementById("taskAction").value,
+    platform:document.getElementById("taskPlatform").value,
+    title:document.getElementById("taskTitle").value.trim(),
+    description:document.getElementById("taskDescription").value.trim(),
+    target_url:document.getElementById("taskUrl").value.trim(),
+    quantity:Number(document.getElementById("taskQuantity").value)
   };
 
   if (!payload.title || !payload.description || !payload.target_url ||
@@ -600,8 +693,8 @@ document.getElementById("createForm").addEventListener("submit", async event => 
 
   try {
     const data = await api("/api/orders/create", {
-      method: "POST",
-      body: JSON.stringify(payload)
+      method:"POST",
+      body:JSON.stringify(payload)
     });
 
     message.className = "small success";
@@ -623,6 +716,15 @@ document.getElementById("createForm").addEventListener("submit", async event => 
 });
 
 async function loadWallet() {
+  await Promise.all([
+    loadProfile(),
+    loadWalletHistory(),
+    loadWalletRequests(),
+    loadTopupInfo()
+  ]);
+}
+
+async function loadWalletHistory() {
   const container = document.getElementById("walletHistory");
   container.innerHTML = '<div class="loading">Загружаем историю...</div>';
 
@@ -644,8 +746,212 @@ async function loadWallet() {
         </div>
       `).join("")
       : '<div class="empty">Операций пока нет.</div>';
+  } catch (error) {
+    container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
+  }
+}
+
+async function loadTopupInfo() {
+  try {
+    const data = await api("/api/wallet/topup-info");
+    currentSbpPhone = data.phone || "";
+    document.getElementById("sbpPhone").textContent = data.phone || "Не указано";
+    document.getElementById("sbpBank").textContent = data.bank || "Не указан";
+  } catch (error) {
+    document.getElementById("sbpPhone").textContent = "Не удалось загрузить";
+    document.getElementById("sbpBank").textContent = "—";
+  }
+}
+
+function copySbpPhone() {
+  if (!currentSbpPhone) {
+    notify("Реквизиты ещё не загружены.");
+    return;
+  }
+
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(currentSbpPhone)
+      .then(() => notify("Телефон скопирован."))
+      .catch(() => notify("Не удалось скопировать телефон."));
+  } else {
+    notify("Телефон СБП: " + currentSbpPhone);
+  }
+}
+
+document.getElementById("topupForm").addEventListener("submit", async event => {
+  event.preventDefault();
+
+  const button = document.getElementById("topupButton");
+  const message = document.getElementById("topupMessage");
+
+  const amount = Number(document.getElementById("topupAmount").value);
+  const sender = document.getElementById("topupSender").value.trim();
+  const proof = document.getElementById("topupProof").value.trim();
+
+  if (!Number.isFinite(amount) || amount < 10 || !sender) {
+    message.className = "small error";
+    message.textContent = "Минимальное пополнение — 10 ₽. Укажи имя отправителя.";
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "Отправляем...";
+
+  try {
+    const payload = {
+      amount,
+      sender_name:sender,
+      proof_file_id:proof || null
+    };
+
+    const data = await api("/api/wallet/topups", {
+      method:"POST",
+      body:JSON.stringify(payload)
+    });
+
+    message.className = "small success";
+    message.textContent = `Заявка №${data.request_id} отправлена. Дождись проверки администратора.`;
+
+    document.getElementById("topupForm").reset();
+    await loadWalletRequests();
+  } catch (error) {
+    message.className = "small error";
+    message.textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = "Отправить заявку";
+  }
+});
+
+function updateWithdrawalPreview() {
+  const amount = Number(document.getElementById("withdrawAmount").value);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    document.getElementById("withdrawFee").textContent = "— ₽";
+    document.getElementById("withdrawPayout").textContent = "— ₽";
+    return;
+  }
+
+  const fee = amount * 0.10;
+  const payout = amount - fee;
+
+  document.getElementById("withdrawFee").textContent = money(fee);
+  document.getElementById("withdrawPayout").textContent = money(payout);
+}
+
+document.getElementById("withdrawAmount")
+  .addEventListener("input", updateWithdrawalPreview);
+
+document.getElementById("withdrawForm").addEventListener("submit", async event => {
+  event.preventDefault();
+
+  const button = document.getElementById("withdrawButton");
+  const message = document.getElementById("withdrawMessage");
+
+  const amount = Number(document.getElementById("withdrawAmount").value);
+  const details = document.getElementById("withdrawDetails").value.trim();
+
+  if (!Number.isFinite(amount) || amount < 15 || !details) {
+    message.className = "small error";
+    message.textContent = "Минимальный вывод — 15 ₽. Заполни реквизиты.";
+    return;
+  }
+
+  if (!confirm(
+    `Создать заявку на вывод ${money(amount)}?\n` +
+    `Комиссия: ${money(amount * 0.10)}\n` +
+    `К выплате: ${money(amount * 0.90)}`
+  )) return;
+
+  button.disabled = true;
+  button.textContent = "Создаём заявку...";
+
+  try {
+    const data = await api("/api/wallet/withdrawals", {
+      method:"POST",
+      body:JSON.stringify({
+        amount,
+        payout_details:details
+      })
+    });
+
+    message.className = "small success";
+    message.textContent =
+      `Заявка №${data.request_id} создана. К выплате: ${money(data.payout)}.`;
+
+    document.getElementById("withdrawForm").reset();
+    updateWithdrawalPreview();
 
     await loadProfile();
+    await loadWalletRequests();
+  } catch (error) {
+    message.className = "small error";
+    message.textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = "Создать заявку на вывод";
+  }
+});
+
+function statusText(status) {
+  const statuses = {
+    pending:"Ожидает проверки",
+    approved:"Одобрена",
+    rejected:"Отклонена",
+    paid:"Выплачена",
+    cancelled:"Отменена"
+  };
+  return statuses[status] || status || "—";
+}
+
+async function loadWalletRequests() {
+  const container = document.getElementById("walletRequests");
+  container.innerHTML = '<div class="loading">Загружаем заявки...</div>';
+
+  try {
+    const data = await api("/api/wallet/requests");
+    const topups = data.topups || [];
+    const withdrawals = data.withdrawals || [];
+
+    let html = "";
+
+    topups.forEach(item => {
+      html += `
+        <div class="panel">
+          <div class="row">
+            <b>Пополнение №${item.id}</b>
+            <b>${money(item.amount)}</b>
+          </div>
+          <div class="row">
+            <span>Статус</span>
+            <b class="status">${escapeHTML(statusText(item.status))}</b>
+          </div>
+          <div class="small">${new Date(item.created_at).toLocaleString("ru-RU")}</div>
+          ${item.admin_comment ? `<div class="notice">${escapeHTML(item.admin_comment)}</div>` : ""}
+        </div>
+      `;
+    });
+
+    withdrawals.forEach(item => {
+      html += `
+        <div class="panel">
+          <div class="row">
+            <b>Вывод №${item.id}</b>
+            <b>${money(item.amount)}</b>
+          </div>
+          <div class="row"><span>Комиссия</span><b>${money(item.fee)}</b></div>
+          <div class="row"><span>К выплате</span><b class="money-green">${money(item.payout)}</b></div>
+          <div class="row">
+            <span>Статус</span>
+            <b class="status">${escapeHTML(statusText(item.status))}</b>
+          </div>
+          <div class="small">${new Date(item.created_at).toLocaleString("ru-RU")}</div>
+          ${item.admin_comment ? `<div class="notice">${escapeHTML(item.admin_comment)}</div>` : ""}
+        </div>
+      `;
+    });
+
+    container.innerHTML = html || '<div class="empty">Заявок пока нет.</div>';
   } catch (error) {
     container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
   }
@@ -698,7 +1004,8 @@ async function loadMyWork(tab = "active", button) {
   container.innerHTML = '<div class="loading">Загружаем...</div>';
 
   if (button) {
-    button.parentElement.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+    button.parentElement.querySelectorAll("button")
+      .forEach(b => b.classList.remove("active"));
     button.classList.add("active");
   }
 
@@ -714,7 +1021,10 @@ async function loadMyWork(tab = "active", button) {
         </div>
         <div class="tag">${escapeHTML(item.platform)} · ${escapeHTML(item.action)}</div>
         <div class="row"><span>Статус</span><b>${escapeHTML(item.status)}</b></div>
-        <div class="row"><span>Срок</span><b>${item.deadline_at ? new Date(item.deadline_at).toLocaleString("ru-RU") : "—"}</b></div>
+        <div class="row">
+          <span>Срок</span>
+          <b>${item.deadline_at ? new Date(item.deadline_at).toLocaleString("ru-RU") : "—"}</b>
+        </div>
         ${item.admin_reason ? `<div class="notice">Комментарий администратора: ${escapeHTML(item.admin_reason)}</div>` : ""}
         ${item.status === "taken" || item.status === "revision" ? `
           <button class="btn" onclick="submitWork(${item.task_id},${item.slot_id})">
@@ -730,21 +1040,19 @@ async function loadMyWork(tab = "active", button) {
 
 async function submitWork(taskId, slotId) {
   const proofUrl = prompt("Вставь ссылку на результат выполнения:");
-
   if (!proofUrl) return;
 
   const screenshotId = prompt(
-    "Введи Telegram file_id скриншота. Загрузку скриншотов через интерфейс подключим отдельным следующим шагом."
+    "Введи Telegram file_id скриншота. Загрузку скриншотов через интерфейс подключим отдельно."
   );
-
   if (!screenshotId) return;
 
   try {
     await api(`/api/orders/${taskId}/slots/${slotId}/submit`, {
-      method: "POST",
-      body: JSON.stringify({
-        proof_url: proofUrl.trim(),
-        screenshot_file_id: screenshotId.trim()
+      method:"POST",
+      body:JSON.stringify({
+        proof_url:proofUrl.trim(),
+        screenshot_file_id:screenshotId.trim()
       })
     });
 
@@ -759,10 +1067,10 @@ async function loadNotifications() {
   try {
     const data = await api("/api/notifications");
 
-    document.getElementById("notifyTasks").checked = data.task_notifications;
-    document.getElementById("notifyWallet").checked = data.wallet_notifications;
-    document.getElementById("notifyReviews").checked = data.review_notifications;
-    document.getElementById("notifySystem").checked = data.system_notifications;
+    document.getElementById("notifyTasks").checked = !!data.task_notifications;
+    document.getElementById("notifyWallet").checked = !!data.wallet_notifications;
+    document.getElementById("notifyReviews").checked = !!data.review_notifications;
+    document.getElementById("notifySystem").checked = !!data.system_notifications;
   } catch (error) {
     console.error(error);
   }
@@ -770,18 +1078,18 @@ async function loadNotifications() {
 
 async function saveNotifications() {
   const payload = {
-    task_notifications: document.getElementById("notifyTasks").checked,
-    wallet_notifications: document.getElementById("notifyWallet").checked,
-    review_notifications: document.getElementById("notifyReviews").checked,
-    system_notifications: document.getElementById("notifySystem").checked
+    task_notifications:document.getElementById("notifyTasks").checked,
+    wallet_notifications:document.getElementById("notifyWallet").checked,
+    review_notifications:document.getElementById("notifyReviews").checked,
+    system_notifications:document.getElementById("notifySystem").checked
   };
 
   const message = document.getElementById("notificationMessage");
 
   try {
     await api("/api/notifications", {
-      method: "PATCH",
-      body: JSON.stringify(payload)
+      method:"PATCH",
+      body:JSON.stringify(payload)
     });
 
     message.className = "small success";
@@ -795,6 +1103,7 @@ async function saveNotifications() {
 async function checkAdmin() {
   try {
     const data = await api("/api/admin/status");
+
     if (data.is_admin) {
       document.getElementById("adminArea").classList.remove("hidden");
     }
@@ -847,8 +1156,8 @@ async function reviewAction(taskId, slotId, action) {
 
   try {
     await api(`/api/orders/${taskId}/slots/${slotId}/${action}`, {
-      method: "POST",
-      body: JSON.stringify(action === "approve" ? {} : { reason: reason.trim() })
+      method:"POST",
+      body:JSON.stringify(action === "approve" ? {} : {reason:reason.trim()})
     });
 
     notify("Действие выполнено.");
@@ -856,6 +1165,188 @@ async function reviewAction(taskId, slotId, action) {
     await loadProfile();
   } catch (error) {
     notify(error.message);
+  }
+}
+
+async function loadAdminTopups() {
+  const container = document.getElementById("adminTopups");
+  container.innerHTML = '<div class="loading">Загружаем заявки...</div>';
+
+  try {
+    const data = await api("/api/admin/topups");
+    const requests = data.requests || [];
+
+    container.innerHTML = requests.length ? requests.map(item => `
+      <div class="task">
+        <h3>Пополнение №${item.id}</h3>
+        <div class="row"><span>Пользователь</span><b>${escapeHTML(item.first_name || "")} (${item.telegram_id})</b></div>
+        <div class="row"><span>Сумма</span><b class="money-green">${money(item.amount)}</b></div>
+        <div class="row"><span>Отправитель</span><b>${escapeHTML(item.sender_name)}</b></div>
+        <div class="row"><span>Банк получателя</span><b>${escapeHTML(item.sbp_bank)}</b></div>
+        <div class="row"><span>Телефон СБП</span><b>${escapeHTML(item.sbp_phone)}</b></div>
+        <div class="small">Подтверждение file_id: ${escapeHTML(item.proof_file_id || "Не приложено")}</div>
+        <div class="small">${new Date(item.created_at).toLocaleString("ru-RU")}</div>
+        <div class="action-buttons">
+          <button class="btn" onclick="adminTopupAction(${item.id},'approve')">Подтвердить пополнение</button>
+          <button class="btn danger" onclick="adminTopupAction(${item.id},'reject')">Отклонить</button>
+        </div>
+      </div>
+    `).join("") : '<div class="empty">Нет заявок на пополнение.</div>';
+  } catch (error) {
+    container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
+  }
+}
+
+async function adminTopupAction(id, action) {
+  let reason = "";
+
+  if (action === "reject") {
+    reason = prompt("Укажи причину отклонения:");
+    if (!reason || reason.trim().length < 2) return;
+  }
+
+  const message = action === "approve"
+    ? "Подтвердить зачисление денег на баланс?"
+    : "Отклонить заявку на пополнение?";
+
+  if (!confirm(message)) return;
+
+  try {
+    await api(`/api/admin/topups/${id}/${action}`, {
+      method:"POST",
+      body:JSON.stringify(action === "reject" ? {reason:reason.trim()} : {})
+    });
+
+    notify("Заявка обработана.");
+    await loadAdminTopups();
+    await loadWalletRequests();
+  } catch (error) {
+    notify(error.message);
+  }
+}
+
+async function loadAdminWithdrawals() {
+  const container = document.getElementById("adminWithdrawals");
+  container.innerHTML = '<div class="loading">Загружаем заявки...</div>';
+
+  try {
+    const data = await api("/api/admin/withdrawals");
+    const requests = data.requests || [];
+
+    container.innerHTML = requests.length ? requests.map(item => `
+      <div class="task">
+        <h3>Вывод №${item.id}</h3>
+        <div class="row"><span>Пользователь</span><b>${escapeHTML(item.first_name || "")} (${item.telegram_id})</b></div>
+        <div class="row"><span>Сумма списания</span><b>${money(item.amount)}</b></div>
+        <div class="row"><span>Комиссия</span><b>${money(item.fee)}</b></div>
+        <div class="row"><span>К выплате</span><b class="money-green">${money(item.payout)}</b></div>
+        <div class="notice">${escapeHTML(item.payout_details)}</div>
+        <div class="small">${new Date(item.created_at).toLocaleString("ru-RU")}</div>
+        <div class="action-buttons">
+          <button class="btn" onclick="adminWithdrawalPaid(${item.id})">Отметить как выплаченный</button>
+          <button class="btn danger" onclick="adminWithdrawalReject(${item.id})">Отклонить заявку</button>
+        </div>
+      </div>
+    `).join("") : '<div class="empty">Нет заявок на вывод.</div>';
+  } catch (error) {
+    container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
+  }
+}
+
+async function adminWithdrawalPaid(id) {
+  if (!confirm("Ты уже отправил деньги пользователю? Только после фактической выплаты нажимай подтверждение.")) {
+    return;
+  }
+
+  try {
+    await api(`/api/admin/withdrawals/${id}/paid`, {
+      method:"POST",
+      body:JSON.stringify({})
+    });
+
+    notify("Заявка отмечена как выплаченная.");
+    await loadAdminWithdrawals();
+    await loadWalletRequests();
+  } catch (error) {
+    notify(error.message);
+  }
+}
+
+async function adminWithdrawalReject(id) {
+  const reason = prompt("Укажи причину отклонения заявки:");
+  if (!reason || reason.trim().length < 2) return;
+
+  if (!confirm("Отклонить заявку и вернуть зарезервированные средства пользователю?")) {
+    return;
+  }
+
+  try {
+    await api(`/api/admin/withdrawals/${id}/reject`, {
+      method:"POST",
+      body:JSON.stringify({reason:reason.trim()})
+    });
+
+    notify("Заявка отклонена.");
+    await loadAdminWithdrawals();
+    await loadWalletRequests();
+  } catch (error) {
+    notify(error.message);
+  }
+}
+
+async function loadAdminSbp() {
+  try {
+    const data = await api("/api/admin/sbp");
+    document.getElementById("adminSbpPhone").value = data.phone || "";
+    document.getElementById("adminSbpBank").value = data.bank || "";
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+document.getElementById("sbpForm").addEventListener("submit", async event => {
+  event.preventDefault();
+
+  const message = document.getElementById("sbpMessage");
+  const phone = document.getElementById("adminSbpPhone").value.trim();
+  const bank = document.getElementById("adminSbpBank").value.trim();
+
+  try {
+    await api("/api/admin/sbp", {
+      method:"PUT",
+      body:JSON.stringify({phone,bank})
+    });
+
+    message.className = "small success";
+    message.textContent = "Реквизиты сохранены.";
+    await loadTopupInfo();
+  } catch (error) {
+    message.className = "small error";
+    message.textContent = error.message;
+  }
+});
+
+async function loadAdminActions() {
+  const container = document.getElementById("adminActions");
+  container.innerHTML = '<div class="loading">Загружаем журнал...</div>';
+
+  try {
+    const data = await api("/api/admin/actions");
+    const actions = data.actions || [];
+
+    container.innerHTML = actions.length ? actions.map(item => `
+      <div class="panel">
+        <div class="row">
+          <b>${escapeHTML(item.action)}</b>
+          <span>Админ ${item.admin_id}</span>
+        </div>
+        <div class="small">${escapeHTML(item.target_type)} №${escapeHTML(item.target_id ?? "—")}</div>
+        ${item.reason ? `<div class="small">Причина: ${escapeHTML(item.reason)}</div>` : ""}
+        <div class="small">${new Date(item.created_at).toLocaleString("ru-RU")}</div>
+      </div>
+    `).join("") : '<div class="empty">Записей пока нет.</div>';
+  } catch (error) {
+    container.innerHTML = `<div class="empty error">${escapeHTML(error.message)}</div>`;
   }
 }
 
@@ -875,6 +1366,14 @@ async function initialize() {
   await checkAdmin();
   await loadMyTasks();
   await loadMyWork("active");
+
+  await loadTopupInfo();
+  await loadWalletRequests();
+  await loadWalletHistory();
+
+  if (!document.getElementById("adminArea").classList.contains("hidden")) {
+    await loadAdminSbp();
+  }
 }
 
 initialize();
