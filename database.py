@@ -87,6 +87,24 @@ SCHEMA = [
     """,
 
     """
+    CREATE TABLE IF NOT EXISTS task_slot_assignments (
+        id BIGSERIAL PRIMARY KEY,
+        task_id BIGINT NOT NULL REFERENCES tasks(id),
+        slot_id BIGINT NOT NULL REFERENCES task_slots(id),
+        executor_id BIGINT NOT NULL REFERENCES users(telegram_id),
+        assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        ended_at TIMESTAMPTZ,
+        outcome TEXT,
+        reason TEXT
+    )
+    """,
+
+    """
+    CREATE INDEX IF NOT EXISTS idx_slot_assignments_executor
+    ON task_slot_assignments(executor_id, assigned_at DESC)
+    """,
+
+    """
     CREATE TABLE IF NOT EXISTS submissions (
         id BIGSERIAL PRIMARY KEY,
         slot_id BIGINT NOT NULL UNIQUE REFERENCES task_slots(id),
